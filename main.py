@@ -1,16 +1,25 @@
-# This is a sample Python script.
 
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
-
-
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
+from glob2 import glob
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+import json
 
 
-# Press the green button in the gutter to run the script.
-if __name__ == '__main__':
-    print_hi('PyCharm')
+directory_path = r"/run/user/26623/gvfs/smb-share:server=physics.ox.ac.uk,share=dfs/DAQ/CondensedMatterGroups/AKGroup/Jagadish/Traces for ML"
 
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+
+complimentary_files_path = os.path.join(directory_path, "Complementary Traces")
+noncomplimentary_files_path = os.path.join(directory_path, "Non_Complementary Traces")
+
+
+complimentary_files = glob(complimentary_files_path + "*/*_gapseqML.txt")
+noncomplimentary_files = glob(noncomplimentary_files_path + "*/*_gapseqML.txt")
+
+
+file_path = noncomplimentary_files[1]
+
+
+with open(file_path) as f:
+    d = json.load(f)
