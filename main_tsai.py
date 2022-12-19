@@ -130,7 +130,30 @@ with open('objs.pkl','rb') as f:  # Python 3: open(..., 'rb')
     X, y, file_names = pickle.load(f)
     
     
-  
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     
 # X, y, file_names = shuffle(X, y, file_names)  
 
