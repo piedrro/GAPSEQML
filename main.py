@@ -18,7 +18,7 @@ from datetime import datetime
 from dataloader import load_dataset
 from file_io import read_gapseq_data
 from trainer import Trainer
-
+import random
 
 import torch
 import torch.nn as nn
@@ -37,12 +37,58 @@ else:
 
 ratio_train = 0.8
 val_test_split = 0.5
-BATCH_SIZE = 50
-LEARNING_RATE = 0.0001
+BATCH_SIZE = 10
+LEARNING_RATE = 0.001
 EPOCHS = 5
 AUGMENT = True
 MODEL_FOLDER = "TEST"
 
+
+def jittering(x, sigma=0.03):
+    
+    x = x + np.random.normal(loc=0., scale=sigma, size=x.shape)
+    
+    return x
+
+def scaling(x, sigma=0.1):
+    
+    factor = np.random.normal(loc=1., scale=sigma, size=(x.shape[0]))
+    
+    x = np.multiply(x, factor)
+    
+    return x
+
+def rolling(x):
+
+    start = np.random.randint(0, len(x))
+    
+    x = np.roll(x, start,0)
+    
+    return x
+    
+def slicing(x, slice_range = [50,100]):
+    
+    slice_percent = np.random.randint(slice_range[0],slice_range[1])
+    
+    slice_length = int((len(x)/100)*slice_percent)
+    
+    x = random.sample(x, slice_length)
+    
+    x = np.interp(np.linspace(0, len(x) - 1, num=1200), np.arange(len(x)), x)
+    
+    return x
+    
+def flipping(x):
+    
+    flip = bool(random.getrandbits(1))
+    
+    if flip:
+    
+        x = np.flip(x)
+    
+    return x
+
+    
 
 
 
@@ -68,14 +114,76 @@ if __name__ == '__main__':
         X, y, file_names = pickle.load(f)
         
         
-    X, y, file_names = shuffle(X, y, file_names)  
+    X, y, file_names = shuffle(X, y, file_names) 
+    
+    
+    # X = [X[0]]*len(X)
+    
+    # slice_percent = 80
+    
+    # slice_length = int((len(x)/100)*slice_percent)
+    
+    # x = random.sample(x, slice_length)
+    
+    # x = np.interp(np.linspace(0, len(x) - 1, num=1200), np.arange(len(x)), x)
+    
+    
+    
+    # x = np.expand_dims(np.expand_dims(np.array(X[0]),0),0)
+    
+    # x = window_slice(x)
+    
+    
+    # for i in range(10):
+        
+    #     slicex = flipping(x)
+        
+    #     plt.plot(slicex)
+    #     plt.show()
+    
+    
+
+
+
+    
+    # from scipy.interpolate import CubicSpline
+    
+    # sigma=0.2
+    # knot=4
+    
+    
+    # random_warps = np.random.normal(loc=1.0, scale=sigma, size=(knot+2, x.shape[0]))
+    
+    
+    
+    
+    # for i in range(10):
+        
+    #     axis = np.random.randint(0, len(x))
+        
+    #     x = np.roll(x, axis,0)
+        
+    #     print(axis)
+        
+    #     # x = scaling(x)
+        
+    #     plt.plot(x)
+    #     plt.show()
+        
+        
+    
+    
+    
+    
+    
+    
+    
+    
     
     X_train, X_val, y_train, y_val = train_test_split(np.array(X),
                                                         np.array(y),
                                                         train_size=0.8,
                                                         shuffle=True)
-    
-    
     
     training_dataset = load_dataset(data = X_train,
                                     labels = y_train,
@@ -90,6 +198,17 @@ if __name__ == '__main__':
     valoader = data.DataLoader(dataset=validation_dataset,
                                 batch_size=BATCH_SIZE,
                                 shuffle=False, num_workers = 20)
+    
+    # traces,label = next(iter(trainloader))
+    
+    
+    
+    
+    # for X in traces:
+        
+    #     plt.plot(X[0])
+    #     plt.show()
+    
     
     model = InceptionTime(1,len(np.unique(y))).to(device)
     

@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 import sklearn
 import numpy as np
-
+import augmentation as aug
 
 
 class load_dataset(data.Dataset):
@@ -26,8 +26,14 @@ class load_dataset(data.Dataset):
         return len(self.data)
 
     def augment_traces(self, X):
+        
+        X = aug.flipping(X)
+        X = aug.jittering(X)
+        X = aug.scaling(X)
+        X = aug.rolling(X)
+        X = aug.slicing(X)
 
-        return y
+        return X
 
     def normalize99(self, X):
     
@@ -60,9 +66,21 @@ class load_dataset(data.Dataset):
 
         X, y = self.data[index], self.labels[index]
         
-        # if self.augment:
-        #     X = self.augment_traces(X)
+        if self.augment:
+            X = self.augment_traces(X)
         
         X, y = self.postprocess(X, y)
         
         return X, y
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
