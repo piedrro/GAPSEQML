@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import sklearn
 import numpy as np
 import augmentation as aug
+from tsaug import TimeWarp, Crop, Quantize, Drift, Reverse
 
 
 class load_dataset(data.Dataset):
@@ -27,12 +28,14 @@ class load_dataset(data.Dataset):
 
     def augment_traces(self, X):
         
-        X = aug.flipping(X)
-        X = aug.jittering(X)
-        X = aug.scaling(X)
-        X = aug.rolling(X)
-        X = aug.slicing(X)
+        augmenter = (TimeWarp(n_speed_change=5, max_speed_ratio=3)@ 0.5
+                     + Quantize(n_levels=[20, 30, 50, 100]) @ 0.5
+                     + Drift(max_drift=(0.01, 0.1), n_drift_points=5) @ 0.5
+                     + Reverse() @ 0.5
+                     )
 
+        X = augmenter.augment(X)
+        
         return X
 
     def normalize99(self, X):
