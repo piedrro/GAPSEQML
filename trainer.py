@@ -12,7 +12,7 @@ from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
 import copy
 import warnings
-
+from vis import generate_plots
 
 
 class Trainer:
@@ -85,12 +85,11 @@ class Trainer:
             
         self.model_path = os.path.join(model_dir, "inceptiontime_model")
         
-        print(self.model_path)
-            
-            
+
+    
             
     def correct_predictions(self, label, pred_label):
-
+    
         if len(label.shape) > 1:
             correct = (label.data.argmax(dim=1) == pred_label.data.argmax(dim=1)).float().sum().cpu()
         else:
@@ -102,7 +101,7 @@ class Trainer:
 
     def train(self):
 
-        progressbar = tqdm.tqdm(range(self.epochs), 'Progress', total=self.epochs, position=0, leave=False)
+        progressbar = tqdm.tqdm(range(self.epochs), 'Progress', total=self.epochs, position=0, leave=True)
 
         for i in progressbar:
             """Epoch counter"""
@@ -145,15 +144,14 @@ class Trainer:
             progressbar.set_description(
                 f'(Training Loss {self.training_loss[-1]:.5f}, Validation Loss {self.validation_loss[-1]:.5f})')  # update progressbar
 
-        return self.model_path
+        return self.model_path, self.best_model_weights
 
     def train_step(self):
 
         train_losses = []  # accumulate the losses here
         train_accuracies = []
 
-        batch_iter = tqdm.tqdm(enumerate(self.trainloader), 'Training', total=len(self.trainloader), position=1,
-                                leave=False)
+        batch_iter = tqdm.tqdm(enumerate(self.trainloader), 'Training', total=len(self.trainloader), position=1, leave=True)
 
         for i, (images, labels) in batch_iter:
             images, labels = images.to(self.device), labels.to(self.device)  # send to device (GPU or CPU)
@@ -187,8 +185,7 @@ class Trainer:
         valid_losses = []  # accumulate the losses here
         valid_accuracies = []
 
-        batch_iter = tqdm.tqdm(enumerate(self.valoader), 'Validation', total=len(self.valoader), position=1,
-                                leave=False)
+        batch_iter = tqdm.tqdm(enumerate(self.valoader), 'Validation', total=len(self.valoader), position=1, leave=True)
 
         for i, (images, labels) in batch_iter:
             images, labels = images.to(self.device), labels.to(self.device)  # send to device (GPU or CPU)
@@ -211,3 +208,69 @@ class Trainer:
         self.validation_accuracy.append(np.mean(valid_accuracies))
 
         batch_iter.close()
+        
+        
+        
+    def evaluate(self, testloader, model_path = None):
+        
+        if os.path.isfile(model_path) == True:
+            
+            self.model_path = model_path
+            
+            model_data = torch.load(model_path)
+            model_weights = model_data['model_state_dict']
+            self.model.load_state_dict(model_weights)
+            
+        else:
+            model_data = {}
+            
+        self.model.eval()  # evaluation mode
+
+        saliency_maps = []
+        true_labels = []
+        pred_labels = []
+        pred_losses = []
+        test_data = []
+        pred_confidences = []
+         
+        batch_iter = tqdm.tqdm(enumerate(testloader), 'Evaluating', total=len(testloader), position=1, leave=True)
+        
+        for i, (images, labels) in batch_iter:
+            
+            traces, labels = images.to(self.device), labels.to(self.device)  # send to device (GPU or CPU)
+        
+            with torch.no_grad():
+                
+                pred_label = self.model(traces)
+                loss = self.criterion(pred_label, labels)
+
+                pred_confidences.extend(torch.nn.functional.softmax(pred_label, dim=1).tolist())
+                pred_labels.extend(pred_label.data.cpu().argmax(dim=1).numpy().tolist())
+                true_labels.extend(labels.data.cpu().argmax(dim=1).numpy().tolist())
+                pred_losses.append(loss.item())
+                test_data.extend(traces.data.cpu().numpy().tolist())
+                
+        batch_iter.close()  
+        
+        test_accuracy = np.sum(np.array(pred_labels) == np.array(true_labels))/len(pred_labels)
+        
+        pred_confidences = np.array(pred_confidences).max(axis=-1).tolist()
+        
+        cm = confusion_matrix(true_labels, pred_labels, normalize='pred')
+        
+        model_data["test_results"] = {}
+        
+        model_data["test_results"]["confusion_matrix"] = cm
+        model_data["test_results"]["true_labels"] = true_labels
+        model_data["test_results"]["pred_labels"] = pred_labels
+        model_data["test_results"]["test_accuracy"] = test_accuracy
+        model_data["test_results"]["test_data"] = test_data
+        model_data["test_results"]["pred_confidences"] = pred_confidences
+        
+        torch.save(model_data, self.model_path)
+        
+        generate_plots(model_data, model_path = self.model_path, show = True)
+
+        return model_data
+
+        

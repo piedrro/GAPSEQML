@@ -34,7 +34,7 @@ class load_dataset(data.Dataset):
                      + Reverse() @ 0.5
                      )
 
-        X = augmenter.augment(X)
+        X = augmenter.augment(np.array(X))
         
         return X
 
