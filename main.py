@@ -1,126 +1,92 @@
 
 from glob2 import glob
 import pandas as pd
+from datetime import datetime 
 import numpy as np
 import matplotlib.pyplot as plt
-import os
-import json
-from skimage import exposure
-import traceback
-import sklearn
 import pickle
-from sklearn.utils import shuffle
 from sklearn.model_selection import train_test_split
-import matplotlib.pyplot as plt
-from datetime import datetime
-
-
-from dataloader import load_dataset
-from file_io import read_gapseq_data, split_dataset
-from trainer import Trainer
-import random
 
 import torch
 import torch.nn as nn
 from torch.utils import data
 import torch.optim as optim
-
+from torch.utils import data
 from tsai.all import InceptionTime
-from sklearn.metrics import confusion_matrix
-import itertools
-import io
-from PIL import Image
+
+from dataloader import load_dataset
+from trainer import Trainer
 
 # device
 if torch.cuda.is_available():
-    device = torch.device('cuda:1')
+    print("Training on GPU")
+    device = torch.device('cuda:0')
 else:
+    print("Training on CPU")
     device = torch.device('cpu')
       
 
 ratio_train = 0.7
 val_test_split = 0.5
-BATCH_SIZE = 20
+BATCH_SIZE = 10
 LEARNING_RATE = 0.0001
-EPOCHS = 10
+EPOCHS = 2
 AUGMENT = True
+NUM_WORKERS = 10
 MODEL_FOLDER = "TEST"
 
 
 
+data_path = r"\\PHYSICS\dfs\DAQ\CondensedMatterGroups\AKGroup\anna\DeeplearningFRET\AutoSim_AAdata\allData.npy"
+labels_path = r"\\PHYSICS\dfs\DAQ\CondensedMatterGroups\AKGroup\anna\DeeplearningFRET\AutoSim_AAdata\classificationData.npy"
 
+X = np.load(data_path,allow_pickle=True)
+y = np.load(labels_path,allow_pickle=True)
+
+y = np.array(y).flatten().tolist()
+X = np.array_split(X, len(X))
+X = [dat[0] for dat in X]
 
 
 if __name__ == '__main__':
+    
+    X_train, X_val, y_train, y_val = train_test_split(X, y,
+                                                     train_size=ratio_train,
+                                                     random_state=42,
+                                                     shuffle=True)
+
+    X_val, X_test, y_val, y_test = train_test_split(X_val, y_val,
+                                                    train_size=val_test_split,
+                                                    random_state=42,
+                                                    shuffle=True)
+    
         
-    directory_path = r"/run/user/26623/gvfs/smb-share:server=physics.ox.ac.uk,share=dfs/DAQ/CondensedMatterGroups/AKGroup/Jagadish/Traces for ML"
-    
-    complimentary_files_path = os.path.join(directory_path, "Complementary Traces")
-    noncomplimentary_files_path = os.path.join(directory_path, "Non_Complementary Traces")
-    
-    complimentary_files = glob(complimentary_files_path + "*/*_gapseqML.txt")
-    noncomplimentary_files = glob(noncomplimentary_files_path + "*/*_gapseqML.txt")
-    
-
-    
-    X = []
-    y = []
-    file_names = []
-    
-    X, y, file_names = read_gapseq_data(complimentary_files, X, y, file_names, 0)
-    X, y, file_names = read_gapseq_data(noncomplimentary_files, X, y, file_names, 1)
-    
-    
-    # with open('objs.pkl', 'wb') as f:  # Python 3: open(..., 'wb')
-    #     pickle.dump([X, y, file_names], f)
-    
-    # with open('objs.pkl','rb') as f:  # Python 3: open(..., 'rb')
-    #     X, y, file_names = pickle.load(f)
-
-
-
-
-
-    train_dataset, validation_dataset, test_dataset = split_dataset(X,y,file_names,
-                                                                    ratio_train,
-                                                                    val_test_split)
-             
-    
-    # # with open('dataset.pkl', 'wb') as f:  # Python 3: open(..., 'wb')
-    # #     pickle.dump([train_dataset, validation_dataset, test_dataset], f)
-    
-    # with open('dataset.pkl','rb') as f:  # Python 3: open(..., 'rb')
-    #     train_dataset, validation_dataset, test_dataset = pickle.load(f)
-        
-        
-        
-    training_dataset = load_dataset(data = train_dataset["X"],
-                                    labels = train_dataset["y"],
+    training_dataset = load_dataset(data = X_train,
+                                    labels = y_train,
                                     augment = True)
     
-    validation_dataset = load_dataset(data = validation_dataset["X"],
-                                    labels = validation_dataset["y"],
+    validation_dataset = load_dataset(data = X_val,
+                                    labels = y_val,
                                       augment=False)
     
-    test_dataset = load_dataset(data = test_dataset["X"],
-                                    labels = test_dataset["y"],
-                                      augment=False)
+    test_dataset = load_dataset(data = X_test,
+                                labels = y_test,
+                                augment=False)
     
     trainloader = data.DataLoader(dataset=training_dataset,
                                   batch_size=BATCH_SIZE,
-                                  shuffle=True, num_workers = 20)
+                                  shuffle=True)
     
     valoader = data.DataLoader(dataset=validation_dataset,
                                 batch_size=BATCH_SIZE,
-                                shuffle=False, num_workers = 20)
+                                shuffle=False)
     
     testloader = data.DataLoader(dataset=test_dataset,
-                                  batch_size=10,
-                                  shuffle=False, num_workers = 20)
+                                  batch_size=BATCH_SIZE,
+                                  shuffle=False)
     
-    model = InceptionTime(1,len(np.unique(y))).to(device)
+    model = InceptionTime(3,len(np.unique(y))).to(device)
     
-
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
@@ -140,5 +106,5 @@ if __name__ == '__main__':
     
     model_path, state_dict_best = trainer.train()
     
-    model.eval()
+    trainer.evaluate(testloader, model_path)
     

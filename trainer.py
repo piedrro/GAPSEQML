@@ -12,7 +12,7 @@ from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
 import copy
 import warnings
-from vis import generate_plots
+
 
 
 class Trainer:
@@ -83,11 +83,9 @@ class Trainer:
         if tensorboard:
             self.writer = SummaryWriter(log_dir= "runs/" + self.model_folder + "_" + timestamp)
             
-        self.model_path = os.path.join(model_dir, "inceptiontime_model")
-        
+        self.model_path = os.path.join(model_dir, f"inceptiontime_model_{self.timestamp}")
 
-    
-            
+        
     def correct_predictions(self, label, pred_label):
     
         if len(label.shape) > 1:
@@ -269,8 +267,6 @@ class Trainer:
         
         torch.save(model_data, self.model_path)
         
-        generate_plots(model_data, model_path = self.model_path, show = True)
-
         return model_data
 
         

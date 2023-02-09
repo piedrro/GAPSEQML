@@ -3,7 +3,6 @@ import torch
 import torch.nn.functional as F
 import sklearn
 import numpy as np
-import augmentation as aug
 from tsaug import TimeWarp, Crop, Quantize, Drift, Reverse
 
 
@@ -58,8 +57,6 @@ class load_dataset(data.Dataset):
         # Typecasting
        
         X = torch.from_numpy(X.copy()).float()
-        X = torch.unsqueeze(X,0)
-        
         y = F.one_hot(torch.tensor(y), num_classes=self.num_classes).float()
 
 
