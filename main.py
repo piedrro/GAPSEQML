@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pickle
 from sklearn.model_selection import train_test_split
-
+import os
 import torch
 import torch.nn as nn
 from torch.utils import data
@@ -15,6 +15,7 @@ from torch.utils import data
 from tsai.all import InceptionTime
 
 from dataloader import load_dataset
+from file_io import read_gapseq_data
 from trainer import Trainer
 
 # device
@@ -37,30 +38,33 @@ MODEL_FOLDER = "TEST"
 
 
 
-data_path = r"\\PHYSICS\dfs\DAQ\CondensedMatterGroups\AKGroup\anna\DeeplearningFRET\AutoSim_AAdata\allData.npy"
-labels_path = r"\\PHYSICS\dfs\DAQ\CondensedMatterGroups\AKGroup\anna\DeeplearningFRET\AutoSim_AAdata\classificationData.npy"
+directory_path = r"/home/turnerp/.cache/gvfs/smb-share:server=physics.ox.ac.uk,share=dfs/DAQ/CondensedMatterGroups/AKGroup/Jagadish/Traces for ML_GAP-sequencing"
 
-X = np.load(data_path,allow_pickle=True)
-y = np.load(labels_path,allow_pickle=True)
+complimentary_files_path = os.path.join(directory_path, "Complementary Traces")
+noncomplimentary_files_path = os.path.join(directory_path, "Non_Complementary Traces")
 
-y = np.array(y).flatten().tolist()
-X = np.array_split(X, len(X))
-X = [dat[0] for dat in X]
+complimentary_files = glob(complimentary_files_path + "*/*_gapseqML.txt")
+noncomplimentary_files = glob(noncomplimentary_files_path + "*/*_gapseqML.txt")
+
+
+X, y, file_names = read_gapseq_data(complimentary_files, label=0, trace_limit=1200)
+X, y, file_names = read_gapseq_data(noncomplimentary_files, X, y, file_names, label=1, trace_limit=1200)
 
 
 if __name__ == '__main__':
     
+    
+
     X_train, X_val, y_train, y_val = train_test_split(X, y,
-                                                     train_size=ratio_train,
-                                                     random_state=42,
-                                                     shuffle=True)
+                                                      train_size=ratio_train,
+                                                      random_state=42,
+                                                      shuffle=True)
 
     X_val, X_test, y_val, y_test = train_test_split(X_val, y_val,
                                                     train_size=val_test_split,
                                                     random_state=42,
                                                     shuffle=True)
     
-        
     training_dataset = load_dataset(data = X_train,
                                     labels = y_train,
                                     augment = True)
@@ -85,7 +89,7 @@ if __name__ == '__main__':
                                   batch_size=BATCH_SIZE,
                                   shuffle=False)
     
-    model = InceptionTime(3,len(np.unique(y))).to(device)
+    model = InceptionTime(1,len(np.unique(y))).to(device)
     
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
@@ -106,5 +110,5 @@ if __name__ == '__main__':
     
     model_path, state_dict_best = trainer.train()
     
-    trainer.evaluate(testloader, model_path)
+    model_data = trainer.evaluate(testloader, model_path)
     

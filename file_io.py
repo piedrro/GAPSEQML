@@ -55,7 +55,7 @@ def split_list(data, chunk_size = 200):
     return split_data
 
 
-def read_gapseq_data(file_paths, X, y, file_names, label = 0):
+def read_gapseq_data(file_paths, X  = [], y = [], file_names = [], label = 0, trace_limit = 1200):
     
 
     for file_path in file_paths:
@@ -76,7 +76,7 @@ def read_gapseq_data(file_paths, X, y, file_names, label = 0):
                     
                     if len(dat) > 200:
                         
-                        dat = dat[:1200]
+                        dat = dat[:trace_limit]
                     
                         file_name = os.path.basename(file_path)
                         

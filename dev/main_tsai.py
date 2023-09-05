@@ -96,7 +96,7 @@ def read_gapseq_data(file_paths, X, y, file_names, label = 0):
 
 
 
-# directory_path = r"/run/user/26623/gvfs/smb-share:server=physics.ox.ac.uk,share=dfs/DAQ/CondensedMatterGroups/AKGroup/Jagadish/Traces for ML"
+# directory_path = r"/home/turnerp/.cache/gvfs/smb-share:server=physics.ox.ac.uk,share=dfs/DAQ/CondensedMatterGroups/AKGroup/Jagadish/Traces for ML_GAP-sequencing"
 
 
 # complimentary_files_path = os.path.join(directory_path, "Complementary Traces")
@@ -105,8 +105,6 @@ def read_gapseq_data(file_paths, X, y, file_names, label = 0):
 
 # complimentary_files = glob(complimentary_files_path + "*/*_gapseqML.txt")
 # noncomplimentary_files = glob(noncomplimentary_files_path + "*/*_gapseqML.txt")
-
-
 
 
 
@@ -119,14 +117,10 @@ def read_gapseq_data(file_paths, X, y, file_names, label = 0):
 
 
 
-
-
-# with open('objs.pkl', 'wb') as f:  # Python 3: open(..., 'wb')
+# with open('dataset.pkl', 'wb') as f:  # Python 3: open(..., 'wb')
 #     pickle.dump([X, y, file_names], f)
 
-
-
-with open('objs.pkl','rb') as f:  # Python 3: open(..., 'rb')
+with open('dataset.pkl','rb') as f:  # Python 3: open(..., 'rb')
     X, y, file_names = pickle.load(f)
     
     
@@ -155,33 +149,33 @@ with open('objs.pkl','rb') as f:  # Python 3: open(..., 'rb')
     
     
     
-# X, y, file_names = shuffle(X, y, file_names)  
+X, y, file_names = shuffle(X, y, file_names)  
 
-# X_train, X_test, y_train, y_test = train_test_split(np.array(X),
-#                                                     np.array(y),
-#                                                     train_size=0.8,
-#                                                     shuffle=True)
+X_train, X_test, y_train, y_test = train_test_split(np.array(X),
+                                                    np.array(y),
+                                                    train_size=0.8,
+                                                    shuffle=True)
 
-# X_train = np.expand_dims(X_train,1)
-# X_test = np.expand_dims(X_test,1)
+X_train = np.expand_dims(X_train,1)
+X_test = np.expand_dims(X_test,1)
 
-# X, y, splits = combine_split_data([np.array(X_train), np.array(X_test)], [np.array(y_train), np.array(y_test)])
+X, y, splits = combine_split_data([np.array(X_train), np.array(X_test)], [np.array(y_train), np.array(y_test)])
 
 
-# tfms  = [None, [Categorize()]]
-# dsets = TSDatasets(X, y, tfms=tfms, splits=splits, inplace=True)
+tfms  = [None, [Categorize()]]
+dsets = TSDatasets(X, y, tfms=tfms, splits=splits, inplace=True)
 
-# dls = TSDataLoaders.from_dsets(dsets.train, dsets.valid, bs=[1024,128], batch_tfms=[TSStandardize()], num_workers=0)
+dls = TSDataLoaders.from_dsets(dsets.train, dsets.valid, bs=[1024,128], batch_tfms=[TSStandardize()], num_workers=0)
 
     
-# # X,y = next(iter(dls.valid))
-# # dls.show_batch(sharey=True)
+X,y = next(iter(dls.valid))
+dls.show_batch(sharey=True)
 
         
 
 # model = InceptionTime(dls.vars, dls.c)
 # learn = Learner(dls, model, metrics=accuracy)
-# # learn.save('stage0')
+# learn.save('stage0')
 
 # # learn.load('stage0')
 # # learn.lr_find()
@@ -195,22 +189,22 @@ with open('objs.pkl','rb') as f:  # Python 3: open(..., 'rb')
 
 
 
-learn = load_learner_all(path='export', dls_fname='dls', model_fname='model', learner_fname='learner')
-dls = learn.dls
-valid_dl = dls.valid
+# learn = load_learner_all(path='export', dls_fname='dls', model_fname='model', learner_fname='learner')
+# dls = learn.dls
+# valid_dl = dls.valid
     
-valid_probas, valid_targets, valid_preds = learn.get_preds(dl=valid_dl, with_decoded=True)
-accuracy = (valid_targets == valid_preds).float().mean().numpy()
+# valid_probas, valid_targets, valid_preds = learn.get_preds(dl=valid_dl, with_decoded=True)
+# accuracy = (valid_targets == valid_preds).float().mean().numpy()
 
-learn.show_probas()
+# learn.show_probas()
      
-interp = ClassificationInterpretation.from_learner(learn)
-interp.plot_confusion_matrix()
+# interp = ClassificationInterpretation.from_learner(learn)
+# interp.plot_confusion_matrix()
    
 
     
 
-learn.show_results()
+# learn.show_results()
      
 
     
