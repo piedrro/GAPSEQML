@@ -1,0 +1,11 @@
+glob2==0.7
+mat4py==0.5.0
+matplotlib==3.7.2
+numpy==1.24.4
+pandas==2.1.0
+scikit_learn==1.2.2
+skimage==0.0
+torch==2.0.1+cu118
+tqdm==4.66.1
+tsai==0.3.7
+tsaug==0.2.1
