@@ -37,22 +37,18 @@ NUM_WORKERS = 10
 MODEL_FOLDER = "TEST"
 
 
-
-directory_path = r"/home/turnerp/.cache/gvfs/smb-share:server=physics.ox.ac.uk,share=dfs/DAQ/CondensedMatterGroups/AKGroup/Jagadish/Traces for ML_GAP-sequencing"
+directory_path = r"path to directory containing complementary/non complementary traces"
 
 complimentary_files_path = os.path.join(directory_path, "Complementary Traces")
-noncomplimentary_files_path = os.path.join(directory_path, "Non_Complementary Traces")
+noncomplimentary_files_path = os.path.join(directory_path, "NonComplementary Traces")
 
 complimentary_files = glob(complimentary_files_path + "*/*_gapseqML.txt")
 noncomplimentary_files = glob(noncomplimentary_files_path + "*/*_gapseqML.txt")
 
-
 X, y, file_names = read_gapseq_data(complimentary_files, label=0, trace_limit=1200)
 X, y, file_names = read_gapseq_data(noncomplimentary_files, X, y, file_names, label=1, trace_limit=1200)
 
-
 if __name__ == '__main__':
-    
     
 
     X_train, X_val, y_train, y_val = train_test_split(X, y,
