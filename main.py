@@ -1,22 +1,18 @@
 
 from glob2 import glob
-import pandas as pd
-from datetime import datetime 
+from datetime import datetime
 import numpy as np
-import matplotlib.pyplot as plt
-import pickle
 from sklearn.model_selection import train_test_split
 import os
 import torch
 import torch.nn as nn
-from torch.utils import data
 import torch.optim as optim
 from torch.utils import data
 from tsai.all import InceptionTime
 
-from dataloader import load_dataset
-from file_io import read_gapseq_data
-from trainer import Trainer
+from src.gapseqml.dataloader import load_dataset
+from src.gapseqml.file_io import read_gapseq_data
+from src.gapseqml.trainer import Trainer
 
 # device
 if torch.cuda.is_available():
