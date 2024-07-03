@@ -1,104 +1,84 @@
-import importlib.resources as resources
 
-package_name = 'gapseqml'
+from glob2 import glob
+from datetime import datetime
+import numpy as np
+from sklearn.model_selection import train_test_split
+import os
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils import data
+from tsai.all import InceptionTime
+import json
+import traceback
+import sklearn
 
-with resources.path(package_name, 'file1.txt') as txt_file:
-    print(txt_file)
-
-with resources.path(package_name, 'file2.json') as json_file:
-    print(json_file)
+from gapseqml.fileIO import import_gapseqml_data, split_datasets
+from gapseqml.trainer import Trainer
+from gapseqml.dataloader import load_dataset
 
 
-#
-# from glob2 import glob
-# from datetime import datetime
-# import numpy as np
-# from sklearn.model_selection import train_test_split
-# import os
-# import torch
-# import torch.nn as nn
-# import torch.optim as optim
-# from torch.utils import data
-# from tsai.all import InceptionTime
-#
-# from src.gapseqml.dataloader import load_dataset
-# from src.gapseqml.file_io import read_gapseq_data
-# from src.gapseqml.trainer import Trainer
-#
-# # device
-# if torch.cuda.is_available():
-#     print("Training on GPU")
-#     device = torch.device('cuda:0')
-# else:
-#     print("Training on CPU")
-#     device = torch.device('cpu')
-#
-#
-# ratio_train = 0.7
-# val_test_split = 0.5
-# BATCH_SIZE = 10
-# LEARNING_RATE = 0.0001
-# EPOCHS = 2
-# AUGMENT = True
-# NUM_WORKERS = 10
-# MODEL_FOLDER = "TEST"
-#
-#
-# directory_path = r"path to directory containing complementary/non complementary traces"
-#
-# complimentary_files_path = os.path.join(directory_path, "Complementary Traces")
-# noncomplimentary_files_path = os.path.join(directory_path, "NonComplementary Traces")
-#
-# complimentary_files = glob(complimentary_files_path + "*/*_gapseqML.txt")
-# noncomplimentary_files = glob(noncomplimentary_files_path + "*/*_gapseqML.txt")
-#
-# X, y, file_names = read_gapseq_data(complimentary_files, label=0, trace_limit=1200)
-# X, y, file_names = read_gapseq_data(noncomplimentary_files, X, y, file_names, label=1, trace_limit=1200)
-#
+# device
+if torch.cuda.is_available():
+    print("Training on GPU")
+    device = torch.device('cuda:0')
+else:
+    print("Training on CPU")
+    device = torch.device('cpu')
+
+
+ratio_train = 0.8
+val_test_split = 0.8
+BATCH_SIZE = 10
+LEARNING_RATE = 0.0001
+EPOCHS = 2
+AUGMENT = True
+NUM_WORKERS = 10
+MODEL_FOLDER = "TEST"
+
+
+comp_folders = [r"data/3nt/comp"]
+noncomp_folders = [r"data/3nt/noncomp",]
+
+ml_data = import_gapseqml_data(comp_folders, label = 0, trace_length = 800)
+ml_data = import_gapseqml_data(noncomp_folders, label = 1, trace_length = 800, ml_data=ml_data)
+
+# datasets = split_datasets(ml_data, ratio_train, val_test_split)
+# train_dataset, validation_dataset, test_dataset = datasets
+
 # if __name__ == '__main__':
-#
-#
-#     X_train, X_val, y_train, y_val = train_test_split(X, y,
-#                                                       train_size=ratio_train,
-#                                                       random_state=42,
-#                                                       shuffle=True)
-#
-#     X_val, X_test, y_val, y_test = train_test_split(X_val, y_val,
-#                                                     train_size=val_test_split,
-#                                                     random_state=42,
-#                                                     shuffle=True)
-#
-#     training_dataset = load_dataset(data = X_train,
-#                                     labels = y_train,
+
+#     training_dataset = load_dataset(data = train_dataset["data"],
+#                                     labels = train_dataset["labels"],
 #                                     augment = True)
-#
-#     validation_dataset = load_dataset(data = X_val,
-#                                     labels = y_val,
+
+#     validation_dataset = load_dataset(data = validation_dataset["data"],
+#                                     labels = validation_dataset["labels"],
 #                                       augment=False)
-#
-#     test_dataset = load_dataset(data = X_test,
-#                                 labels = y_test,
+
+#     test_dataset = load_dataset(data = test_dataset["data"],
+#                                 labels = test_dataset["labels"],
 #                                 augment=False)
-#
+
 #     trainloader = data.DataLoader(dataset=training_dataset,
 #                                   batch_size=BATCH_SIZE,
 #                                   shuffle=True)
-#
+
 #     valoader = data.DataLoader(dataset=validation_dataset,
 #                                 batch_size=BATCH_SIZE,
 #                                 shuffle=False)
-#
+
 #     testloader = data.DataLoader(dataset=test_dataset,
 #                                   batch_size=BATCH_SIZE,
 #                                   shuffle=False)
-#
-#     model = InceptionTime(1,len(np.unique(y))).to(device)
-#
+
+#     model = InceptionTime(1,len(np.unique(train_dataset["labels"]))).to(device)
+
 #     criterion = nn.CrossEntropyLoss()
 #     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
 #     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
 #     timestamp = datetime.now().strftime("%y%m%d_%H%M")
-#
+
 #     trainer = Trainer(model=model,
 #               device=device,
 #               optimizer=optimizer,
@@ -110,8 +90,11 @@ with resources.path(package_name, 'file2.json') as json_file:
 #               epochs=EPOCHS,
 #               batch_size = BATCH_SIZE,
 #               model_folder=MODEL_FOLDER)
-#
+
 #     model_path, state_dict_best = trainer.train()
-#
+
 #     model_data = trainer.evaluate(testloader, model_path)
-#
+    
+    
+    
+    

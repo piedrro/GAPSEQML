@@ -37,6 +37,7 @@ dependencies = [
     "tqdm",
     "tsai",
     "tsaug",
+    "tensorboard",
 ]
 
 [project.optional-dependencies]
