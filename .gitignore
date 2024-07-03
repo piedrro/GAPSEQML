@@ -1,7 +1,2 @@
-/data/
-/export/
-/models/
-/objs.pkl
-/runs/
-/dev/
-/dev/
+/data
+/models

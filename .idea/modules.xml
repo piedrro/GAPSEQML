@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/GAPSEQML.iml" filepath="$PROJECT_DIR$/.idea/GAPSEQML.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/gapseqml.iml" filepath="$PROJECT_DIR$/.idea/gapseqml.iml" />
     </modules>
   </component>
 </project>
