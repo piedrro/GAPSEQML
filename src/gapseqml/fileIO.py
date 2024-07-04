@@ -40,8 +40,9 @@ def preprocess_data(x):
     
     return x
 
-def import_new_ml_data(imported_data, path, label=0, trace_length = 1000,
-                       ml_data = {"data":[], "labels":[], "file_names":[]}):
+def import_new_ml_data(imported_data, path, label=0,
+        n_nucleotide=1, trace_length = 1000,
+        ml_data = {"data":[],"labels":[],"n_nucleotide":[],"file_names":[]}):
     
     n_traces = 0
     
@@ -51,8 +52,6 @@ def import_new_ml_data(imported_data, path, label=0, trace_length = 1000,
         try:
 
             data = imported_data["data"][i]
-            dataset = imported_data["dataset"][i]
-            channels = imported_data["channels"][i]
             
             for dat in data:
                 
@@ -70,6 +69,7 @@ def import_new_ml_data(imported_data, path, label=0, trace_length = 1000,
                             ml_data["data"].append(dat)
                             ml_data["labels"].append(int(label))
                             ml_data["file_names"].append(str(file_name))
+                            ml_data["n_nucleotide"].append(int(n_nucleotide))
                 
                             n_traces += 1
                 
@@ -80,11 +80,11 @@ def import_new_ml_data(imported_data, path, label=0, trace_length = 1000,
             print(traceback.format_exc())
             pass
 
-    return ml_data
+    return ml_data, n_traces
 
 
-def import_legacy_ml_data(imported_data, path, label=0, trace_length=1000,
-                          ml_data = {"data":[], "labels":[],"file_names":[]}):
+def import_legacy_ml_data(imported_data, path, label=0, n_nucleotide=1, trace_length=1000,
+                          ml_data = {"data":[],"labels":[],"n_nucleotide":[],"file_names":[]}):
 
     try:
 
@@ -111,6 +111,7 @@ def import_legacy_ml_data(imported_data, path, label=0, trace_length=1000,
                         ml_data["data"].append(dat)
                         ml_data["labels"].append(int(label))
                         ml_data["file_names"].append(str(file_name))
+                        ml_data["n_nucleotide"].append(int(n_nucleotide))
             
                         n_traces += 1
                 
@@ -121,11 +122,11 @@ def import_legacy_ml_data(imported_data, path, label=0, trace_length=1000,
         print(traceback.format_exc())
         pass
 
-    return ml_data
+    return ml_data, n_traces
 
 
-def import_gapseqml_data(paths, label = 0, trace_length = 1000, 
-                         ml_data = {"data":[], "labels":[], "file_names":[]}, ):
+def import_gapseqml_data(paths, label = 0, n_nucleotide = 1, trace_length = 1000,
+                         ml_data = {"data":[],"labels":[],"n_nucleotide":[],"file_names":[]}):
     
     if type(paths) != list:
         paths = [paths]
@@ -141,6 +142,8 @@ def import_gapseqml_data(paths, label = 0, trace_length = 1000,
     legacy_expected_keys = ["data", "label", "data_class", "data_nucleotide"]
     expected_keys = ["data","states","ml_label","dataset","channels",
                      "user_label","nucleotide_label","import_path"]
+    
+    n_imported = 0
     
     if len(path_list) > 0:
         
@@ -167,10 +170,16 @@ def import_gapseqml_data(paths, label = 0, trace_length = 1000,
                     if import_error == False:
         
                         if import_mode == "legacy":
-                            ml_data = import_legacy_ml_data(d, path, label, trace_length, ml_data)
+                            ml_data, n_traces = import_legacy_ml_data(d, path, label,
+                                n_nucleotide, trace_length, ml_data)
+                            
+                            n_imported += n_traces
                             
                         if import_mode == "new":
-                            ml_data = import_new_ml_data(d, path, label, trace_length, ml_data)
+                            ml_data, n_traces = import_new_ml_data(d, path, label,
+                                n_nucleotide, trace_length, ml_data)
+                            
+                            n_imported += n_traces
 
                 if ext == ".json":
                     pass
@@ -179,7 +188,7 @@ def import_gapseqml_data(paths, label = 0, trace_length = 1000,
                 print(traceback.format_exc())
             
     if len(ml_data["data"]) > 0:
-        print(f"Imported {len(ml_data['data'])} traces with label: {label}")
+        print(f"Imported {n_imported} traces with label: {label}")
     else:
         return None
         
@@ -211,14 +220,18 @@ def limit_train_data(train_data, num_files):
 
 def split_datasets(ml_data, ratio_train,val_test_split):
     
-    ml_data["data"] = np.array(ml_data["data"])
-    ml_data["labels"] = np.array(ml_data["labels"])
-    ml_data["file_names"] = np.array(ml_data["file_names"])
+    train_dataset = {}
+    validation_dataset = {}
+    test_dataset = {}
     
-    train_dataset = {"data":[],"labels":[],"file_names":[]}
-    validation_dataset = {"data":[],"labels":[],"file_names":[]}
-    test_dataset = {"data":[],"labels":[],"file_names":[]}
-    
+    for key, value in ml_data.items():
+        ml_data[key] = np.array(value)
+        
+        train_dataset[key] = []
+        validation_dataset[key] = []
+        test_dataset[key] = []
+        
+        
     for label in np.unique(ml_data["labels"]):
         
         label_file_names = np.unique(np.extract(ml_data["labels"]==label,ml_data["file_names"]))

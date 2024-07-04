@@ -12,6 +12,7 @@ from tsai.all import InceptionTime
 import json
 import traceback
 import sklearn
+import pickle
 
 from gapseqml.fileIO import import_gapseqml_data, split_datasets
 from gapseqml.trainer import Trainer
@@ -28,18 +29,30 @@ else:
 ratio_train = 0.8
 val_test_split = 0.8
 BATCH_SIZE = 10
-LEARNING_RATE = 0.0001
-EPOCHS = 2
+LEARNING_RATE = 0.001
+EPOCHS = 3
 AUGMENT = True
 NUM_WORKERS = 10
 MODEL_FOLDER = "TEST"
 
 
-comp_folders = [r"data/3nt/comp"]
-noncomp_folders = [r"data/3nt/noncomp",]
+ml_data = {"data":[],"labels":[],"n_nucleotide":[],"file_names":[]}
 
-ml_data = import_gapseqml_data(comp_folders, label = 0, trace_length = 800)
-ml_data = import_gapseqml_data(noncomp_folders, label = 1, trace_length = 800, ml_data=ml_data)
+ml_data = import_gapseqml_data(r"data/3nt/comp",
+    label = 0, n_nucleotide=3, trace_length = 800, ml_data=ml_data)
+ml_data = import_gapseqml_data(r"data/3nt/noncomp",
+    label = 1, n_nucleotide=3, trace_length = 800, ml_data=ml_data)
+# ml_data = import_gapseqml_data(r"data/5nt/comp",
+#     label = 0, n_nucleotide=5, trace_length = 800, ml_data=ml_data)
+# ml_data = import_gapseqml_data(r"data/5nt/noncomp",
+#     label = 1, n_nucleotide=5, trace_length = 800, ml_data=ml_data)
+
+with open('ml_data.pickle', 'wb') as handle:
+    pickle.dump(ml_data, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+with open('ml_data.pickle', 'rb') as handle:
+    ml_data = pickle.load(handle)
+
 
 datasets = split_datasets(ml_data, ratio_train, val_test_split)
 train_dataset, validation_dataset, test_dataset = datasets
@@ -64,20 +77,21 @@ if __name__ == '__main__':
               lr_scheduler=scheduler,
               tensorboard=True,
               epochs=EPOCHS,
+              learning_rate = LEARNING_RATE,
               batch_size = BATCH_SIZE,
               model_folder=MODEL_FOLDER)
     
-    # trainer.tune_hyperparameters(num_trials=5, 
-    #                              num_traces = 200, 
-    #                              num_epochs = 5)
-    
-    trainer.visualise_augmentations(n_examples=5, 
-                                    show_plots=True, 
+    trainer.visualise_augmentations(n_examples=5,
+                                    show_plots=True,
                                     save_plots = True)
-
-    # model_path, state_dict_best = trainer.train()
-
-    # model_data = trainer.evaluate(testloader, model_path)
+    
+    trainer.tune_hyperparameters(num_trials=5, 
+                                  num_traces = 200, 
+                                  num_epochs = 5)
+    
+    model_path, state_dict_best = trainer.train()
+    
+    model_data = trainer.evaluate(test_dataset, model_path)
     
     
     

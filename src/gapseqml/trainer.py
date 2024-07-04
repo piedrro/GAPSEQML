@@ -12,14 +12,14 @@ from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
 import copy
 import warnings
-from gapseqml.dataloader import load_dataset
+
 from torch.utils.data import DataLoader
 import torch.optim as optim
 import optuna
 import traceback
 import pathlib
-
-
+from gapseqml.dataloader import load_dataset
+from gapseqml.visualise import plot_evaluation_visualisations
 
 class Trainer:
 
@@ -32,6 +32,7 @@ class Trainer:
                  train_dataset: dict = {},
                  validation_dataset: dict = {},
                  test_dataset: dict = {},
+                 learning_rate: float = None,
                  batch_size: int = None,
                  lr_scheduler: torch.optim.lr_scheduler = None,
                  tensorboard=bool,
@@ -64,7 +65,8 @@ class Trainer:
         self.training_accuracy = []
         self.validation_loss = []
         self.validation_accuracy = []
-        self.learning_rate = []
+        self.learning_rate = learning_rate
+        self.learning_rates = []
         self.kfolds = kfolds
         self.fold = fold
         self.timestamp = timestamp
@@ -293,6 +295,10 @@ class Trainer:
         self.learning_rate = float(trial.params["learning_rate"])
         self.hyperparameter_study = study
         
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=20, gamma=0.5)
+        self.initialise_dataloaders()
+        
         model_dir = pathlib.Path(self.model_dir)
 
         optimisation_history_path = pathlib.Path('').joinpath(*model_dir.parts, "Optuna","optuna_optimisation_history_plot.png")
@@ -359,7 +365,8 @@ class Trainer:
                         'validation_loss': self.validation_loss,
                         'training_accuracy': self.training_accuracy,
                         'validation_accuracy': self.validation_accuracy,
-                        'num_validation_images': self.num_validation_images}, self.model_path)
+                        'learning_rates': self.learning_rates,
+                        }, self.model_path)
 
             progressbar.set_description(
                 f'(Training Loss {self.training_loss[-1]:.5f}, Validation Loss {self.validation_loss[-1]:.5f})')  # update progressbar
@@ -395,7 +402,7 @@ class Trainer:
 
         self.training_loss.append(np.mean(train_losses))
         self.training_accuracy.append(np.mean(train_accuracies))
-        self.learning_rate.append(self.optimizer.param_groups[0]['lr'])
+        self.learning_rates.append(self.optimizer.param_groups[0]['lr'])
 
         batch_iter.close()
 
@@ -430,7 +437,7 @@ class Trainer:
         batch_iter.close()
         
     
-    def evaluate(self, testloader, model_path = None):
+    def evaluate(self, test_dataset = None, model_path = None):
         
         if os.path.isfile(model_path) == True:
             
@@ -443,6 +450,10 @@ class Trainer:
         else:
             model_data = {}
             
+        if test_dataset is not None:
+            self.initialise_dataloader(self.test_dataset, "testloader", 
+                                       augment=False, batch_size=self.batch_size)
+            
         self.model.eval()  # evaluation mode
 
         saliency_maps = []
@@ -452,7 +463,8 @@ class Trainer:
         test_data = []
         pred_confidences = []
          
-        batch_iter = tqdm.tqdm(enumerate(testloader), 'Evaluating', total=len(testloader), position=1, leave=True)
+        batch_iter = tqdm.tqdm(enumerate(self.testloader), 'Evaluating', 
+                               total=len(self.testloader), position=1, leave=True)
         
         for i, (images, labels) in batch_iter:
             
@@ -475,7 +487,7 @@ class Trainer:
         
         pred_confidences = np.array(pred_confidences).max(axis=-1).tolist()
         
-        cm = confusion_matrix(true_labels, pred_labels, normalize='pred')
+        cm = confusion_matrix(true_labels, pred_labels, normalize='true')
         
         model_data["test_results"] = {}
         
@@ -487,6 +499,7 @@ class Trainer:
         model_data["test_results"]["pred_confidences"] = pred_confidences
         
         torch.save(model_data, self.model_path)
+        plot_evaluation_visualisations(model_data, self.model_path)
         
         return model_data
 
