@@ -140,9 +140,55 @@ class Trainer:
             
             return None
         
+    def visualise_augmentations(self,  n_examples = 1, save_plots=True, show_plots=False):
+
+        model_dir = pathlib.Path(self.model_dir)
+
+        for example_int in range(n_examples):
+
+            from random import randint
+            random_index = randint(0, len(self.train_dataset["data"])-1)
+
+            dataset = load_dataset(
+                data=[self.train_dataset["data"][random_index]]*25,
+                labels=[self.train_dataset["labels"][random_index]]*25,
+                augment=True)
+            
+            dataloader = DataLoader(dataset=dataset, batch_size=1, shuffle=False)
+
+            centre_trace = self.train_dataset["data"][random_index]
+            
+            augmented_traces = []
+            
+            for data, _ in dataloader:
+
+                data = data[0][0].numpy()
+                augmented_traces.append(data)
+                
+            fig, ax = plt.subplots(3, 3, figsize=(18, 10))
+            for i in range(3):
+                for j in range(3):
+                    index = i * 3 + j
+                    if i == 1 and j == 1:
+                        ax[i, j].plot(centre_trace, color='red')
+                    else:
+                        ax[i, j].plot(augmented_traces[index], color='blue')
+                    ax[i, j].axis('off')
+            
+            fig.suptitle('Example Augmentations', fontsize=16)
+            fig.tight_layout()
+
+            if save_plots:
+                plot_save_path = pathlib.Path('').joinpath(*model_dir.parts, "example_augmentations", f"example_augmentation{example_int}.tif")
+                if not os.path.exists(os.path.dirname(plot_save_path)):
+                    os.makedirs(os.path.dirname(plot_save_path))
+                plt.savefig(plot_save_path, bbox_inches='tight', dpi=300)
+
+            if show_plots:
+                plt.show()
+            plt.close()
         
-
-
+    
     def correct_predictions(self, label, pred_label):
     
         if len(label.shape) > 1:
