@@ -12,6 +12,11 @@ from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
 import copy
 import warnings
+from gapseqml.dataloader import load_dataset
+from torch.utils.data import DataLoader
+import torch.optim as optim
+import optuna
+import traceback
 
 
 
@@ -23,8 +28,9 @@ class Trainer:
                  device: torch.device = None,
                  criterion: torch.nn.Module = None,
                  optimizer: torch.optim.Optimizer = None,
-                 trainloader: torch.utils.data.Dataset = None,
-                 valoader: torch.utils.data.Dataset = None,
+                 train_dataset: dict = {},
+                 validation_dataset: dict = {},
+                 test_dataset: dict = {},
                  batch_size: int = None,
                  lr_scheduler: torch.optim.lr_scheduler = None,
                  tensorboard=bool,
@@ -42,8 +48,9 @@ class Trainer:
         self.criterion = criterion
         self.optimizer = optimizer
         self.lr_scheduler = lr_scheduler
-        self.trainloader = trainloader
-        self.valoader = valoader
+        self.train_dataset = train_dataset
+        self.validation_dataset = validation_dataset
+        self.test_dataset = test_dataset
         self.batch_size = batch_size
         self.device = device
         self.epochs = epochs
@@ -52,8 +59,6 @@ class Trainer:
         self.model_path = model_path
         self.epoch = 0
         self.tensorboard = tensorboard
-        self.num_train_images = len(self.trainloader)*self.batch_size
-        self.num_validation_images = len(self.valoader)*self.batch_size
         self.training_loss = []
         self.training_accuracy = []
         self.validation_loss = []
@@ -84,8 +89,59 @@ class Trainer:
             self.writer = SummaryWriter(log_dir= "runs/" + self.model_folder + "_" + timestamp)
             
         self.model_path = os.path.join(model_dir, f"inceptiontime_model_{self.timestamp}")
+        
+        self.initialise_dataloaders()
 
         
+    def initialise_dataloaders(self):
+        
+        if hasattr(self, "train_dataset"):
+            
+            self.initialise_dataloader(self.train_dataset, "trainloader", 
+                                       augment=True, batch_size=self.batch_size)
+        
+
+        if hasattr(self, "validation_dataset"):
+
+            self.initialise_dataloader(self.validation_dataset, "valoader", 
+                                       augment=False, batch_size=self.batch_size)
+            
+        if hasattr(self, "test_dataset"):
+
+            self.initialise_dataloader(self.test_dataset, "testloader", 
+                                       augment=False, batch_size=self.batch_size)
+        
+        
+    def initialise_dataloader(self, dataset, name = "testloader", 
+                              augment = False, batch_size = 10, shuffle=True):
+        
+        try:
+        
+            dataset = load_dataset(data = dataset["data"],
+                               labels = dataset["labels"],
+                               augment=augment)
+    
+            dataloader = DataLoader(dataset=dataset,
+                                    batch_size=batch_size,
+                                    shuffle=False)
+            
+            setattr(self, name, dataloader)
+            
+            print(f"initialised {name} dataloader")
+            
+            n_images = len(dataloader)*batch_size
+            setattr(self, f"num_{name.replace('loader','')}_images", n_images)
+            
+            return dataloader
+            
+        except:
+            print(traceback.format_exc())
+            
+            return None
+        
+        
+
+
     def correct_predictions(self, label, pred_label):
     
         if len(label.shape) > 1:
@@ -96,6 +152,145 @@ class Trainer:
         accuracy = correct / label.shape[0]
 
         return accuracy.numpy()
+
+
+    def optuna_objective(self, trial):
+
+        batch_size = trial.suggest_int("batch_size", 10, 200, log=True)
+        learning_rate = trial.suggest_float("learning_rate", 1e-6, 1e-1)
+
+        tune_trainloader = DataLoader(dataset=self.tune_train_dataset, batch_size=batch_size, shuffle=False)
+        tune_valoader = DataLoader(dataset=self.tune_val_dataset, batch_size=batch_size, shuffle=False)
+
+        self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
+        self.lr_scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=20, gamma=0.5)
+
+        model = copy.deepcopy(self.model)
+        model.to(self.device)
+
+        running_loss = 0.0
+
+        for data, labels in tune_trainloader:
+            data, labels = data.to(self.device), labels.to(self.device)
+            if not torch.isnan(data).any():
+                self.optimizer.zero_grad()
+                pred_label = model(data)
+                loss = self.criterion(pred_label, labels)
+                loss.backward()
+                self.optimizer.step()
+
+        for data, labels in tune_valoader:
+            data, labels = data.to(self.device), labels.to(self.device)
+            if not torch.isnan(data).any():
+                pred_label = model(data)
+                loss = self.criterion(pred_label, labels)
+                running_loss += loss.item()
+
+        return running_loss/len(tune_valoader)
+
+
+    def load_tune_dataset(self, num_traces=100, num_epochs = 10):
+
+        tune_images = []
+        tune_labels = []
+        
+        tune_dataset = {"data": self.train_dataset["data"][:num_traces].copy(),
+                        "labels": self.train_dataset["labels"][:num_traces].copy()}
+        
+        self.initialise_dataloader(tune_dataset, "tuneloader", 
+                                   augment=True, batch_size=self.batch_size)
+
+        for i in range(num_epochs):
+            for images, labels in self.tuneloader:
+                for image in images:
+                    image = image.numpy()
+                    tune_images.extend(image)
+                for label in labels:
+                    label = int(label.argmax(dim=0).numpy())
+                    tune_labels.append(label)
+
+        print(f"Loaded {len(tune_images)} images for hyperparameter tuning.")
+        
+        tune_train_data = {"data": tune_images,
+                              "labels": tune_labels}
+        
+        tune_val_data = {"data": self.validation_dataset["data"][:num_traces].copy(),
+                          "labels": self.validation_dataset["labels"][:num_traces].copy()}
+        
+        self.tune_train_dataset = load_dataset(data = tune_train_data["data"],
+                                                labels = tune_train_data["labels"],
+                                                augment=False)
+        
+        self.tune_val_dataset = load_dataset(data = tune_val_data["data"],
+                                                labels = tune_val_data["labels"],
+                                                augment=False)
+        
+    def tune_hyperparameters(self, num_trials=5, num_traces = 500, num_epochs = 4):
+
+        self.load_tune_dataset(num_traces=num_traces, num_epochs=num_epochs)
+
+        self.num_tune_traces = num_traces
+        self.num_tune_epochs = num_epochs
+
+        study = optuna.create_study(direction='minimize')
+        study.optimize(self.optuna_objective, n_trials=num_trials)
+
+        print("Best trial:")
+        trial = study.best_trial
+        print("  Value: ", trial.value)
+        print("  Params: ")
+        for key, value in trial.params.items():
+            print("    {}: {}".format(key, value))
+
+        # self.batch_size = int(trial.params["batch_size"])
+        # self.learning_rate = float(trial.params["learning_rate"])
+        # self.hyperparameter_study = study
+
+    #     optimisation_history_path = pathlib.Path('').joinpath(*self.model_dir.parts, "Optuna","optuna_optimisation_history_plot.png")
+    #     slice_plot_path = pathlib.Path('').joinpath(*self.model_dir.parts, "Optuna","optuna_slice_plot.png")
+    #     parallel_coordinate_plot_path = pathlib.Path('').joinpath(*self.model_dir.parts, "Optuna","optuna_parallel_coordinate_plot.png")
+    #     contour_plot_path = pathlib.Path('').joinpath(*self.model_dir.parts, "Optuna","optuna_contour_plot.png")
+    #     param_importances_plot_path = pathlib.Path('').joinpath(*self.model_dir.parts, "Optuna","optuna_param_importances_plot.png")
+
+    #     if not os.path.exists(os.path.dirname(optimisation_history_path)):
+    #         os.makedirs(os.path.dirname(optimisation_history_path))
+
+    #     optuna.visualization.plot_optimization_history(study).write_image(optimisation_history_path)
+    #     optuna.visualization.plot_slice(study).write_image(slice_plot_path)
+    #     optuna.visualization.plot_parallel_coordinate(study).write_image(parallel_coordinate_plot_path)
+    #     optuna.visualization.plot_contour(study).write_image(contour_plot_path)
+    #     optuna.visualization.plot_param_importances(study).write_image(param_importances_plot_path)
+
+    #     from PIL import Image
+    #     img = np.asarray(Image.open(slice_plot_path))
+    #     plt.imshow(img)
+    #     plt.axis('off')
+    #     plt.show()
+
+    #     return study
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     def train(self):
 
@@ -207,8 +402,7 @@ class Trainer:
 
         batch_iter.close()
         
-        
-        
+    
     def evaluate(self, testloader, model_path = None):
         
         if os.path.isfile(model_path) == True:

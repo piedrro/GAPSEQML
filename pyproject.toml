@@ -38,6 +38,7 @@ dependencies = [
     "tsai",
     "tsaug",
     "tensorboard",
+    "optuna",
 ]
 
 [project.optional-dependencies]

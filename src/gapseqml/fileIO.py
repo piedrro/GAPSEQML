@@ -84,7 +84,7 @@ def import_new_ml_data(imported_data, path, label=0, trace_length = 1000,
 
 
 def import_legacy_ml_data(imported_data, path, label=0, trace_length=1000,
-                          ml_data = {"data":[], "labels":[], "file_names":[]}):
+                          ml_data = {"data":[], "labels":[],"file_names":[]}):
 
     try:
 
