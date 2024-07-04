@@ -39,6 +39,8 @@ dependencies = [
     "tsaug",
     "tensorboard",
     "optuna",
+    "plotly",
+    "kaleido",
 ]
 
 [project.optional-dependencies]

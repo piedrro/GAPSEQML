@@ -17,6 +17,7 @@ from torch.utils.data import DataLoader
 import torch.optim as optim
 import optuna
 import traceback
+import pathlib
 
 
 
@@ -71,14 +72,14 @@ class Trainer:
         self.best_model_weights = None
         
         if os.path.exists(save_dir):
-            model_dir = os.path.join(save_dir,"models", model_folder + "_" + self.timestamp)
+            self.model_dir = os.path.join(save_dir,"models", model_folder + "_" + self.timestamp)
         else:
-            model_dir = os.path.join("models", model_folder + "_" + self.timestamp)
+            self.model_dir = os.path.join("models", model_folder + "_" + self.timestamp)
             
-        model_dir = os.path.abspath(model_dir)
+        self.model_dir = os.path.abspath(self.model_dir)
         
-        if not os.path.exists(model_dir):
-            os.makedirs(model_dir)
+        if not os.path.exists(self.model_dir):
+            os.makedirs(self.model_dir)
 
         if pretrained_model:
             if os.path.isfile(pretrained_model):
@@ -88,7 +89,7 @@ class Trainer:
         if tensorboard:
             self.writer = SummaryWriter(log_dir= "runs/" + self.model_folder + "_" + timestamp)
             
-        self.model_path = os.path.join(model_dir, f"inceptiontime_model_{self.timestamp}")
+        self.model_path = os.path.join(self.model_dir, f"inceptiontime_model_{self.timestamp}")
         
         self.initialise_dataloaders()
 
@@ -156,7 +157,7 @@ class Trainer:
 
     def optuna_objective(self, trial):
 
-        batch_size = trial.suggest_int("batch_size", 10, 200, log=True)
+        batch_size = trial.suggest_int("batch_size", 10, 100, log=True)
         learning_rate = trial.suggest_float("learning_rate", 1e-6, 1e-1)
 
         tune_trainloader = DataLoader(dataset=self.tune_train_dataset, batch_size=batch_size, shuffle=False)
@@ -209,7 +210,7 @@ class Trainer:
                     label = int(label.argmax(dim=0).numpy())
                     tune_labels.append(label)
 
-        print(f"Loaded {len(tune_images)} images for hyperparameter tuning.")
+        print(f"Loaded {len(tune_images)} traces for hyperparameter tuning.")
         
         tune_train_data = {"data": tune_images,
                               "labels": tune_labels}
@@ -242,54 +243,34 @@ class Trainer:
         for key, value in trial.params.items():
             print("    {}: {}".format(key, value))
 
-        # self.batch_size = int(trial.params["batch_size"])
-        # self.learning_rate = float(trial.params["learning_rate"])
-        # self.hyperparameter_study = study
+        self.batch_size = int(trial.params["batch_size"])
+        self.learning_rate = float(trial.params["learning_rate"])
+        self.hyperparameter_study = study
+        
+        model_dir = pathlib.Path(self.model_dir)
 
-    #     optimisation_history_path = pathlib.Path('').joinpath(*self.model_dir.parts, "Optuna","optuna_optimisation_history_plot.png")
-    #     slice_plot_path = pathlib.Path('').joinpath(*self.model_dir.parts, "Optuna","optuna_slice_plot.png")
-    #     parallel_coordinate_plot_path = pathlib.Path('').joinpath(*self.model_dir.parts, "Optuna","optuna_parallel_coordinate_plot.png")
-    #     contour_plot_path = pathlib.Path('').joinpath(*self.model_dir.parts, "Optuna","optuna_contour_plot.png")
-    #     param_importances_plot_path = pathlib.Path('').joinpath(*self.model_dir.parts, "Optuna","optuna_param_importances_plot.png")
+        optimisation_history_path = pathlib.Path('').joinpath(*model_dir.parts, "Optuna","optuna_optimisation_history_plot.png")
+        slice_plot_path = pathlib.Path('').joinpath(*model_dir.parts, "Optuna","optuna_slice_plot.png")
+        parallel_coordinate_plot_path = pathlib.Path('').joinpath(*model_dir.parts, "Optuna","optuna_parallel_coordinate_plot.png")
+        contour_plot_path = pathlib.Path('').joinpath(*model_dir.parts, "Optuna","optuna_contour_plot.png")
+        param_importances_plot_path = pathlib.Path('').joinpath(*model_dir.parts, "Optuna","optuna_param_importances_plot.png")
 
-    #     if not os.path.exists(os.path.dirname(optimisation_history_path)):
-    #         os.makedirs(os.path.dirname(optimisation_history_path))
+        if not os.path.exists(os.path.dirname(optimisation_history_path)):
+            os.makedirs(os.path.dirname(optimisation_history_path))
 
-    #     optuna.visualization.plot_optimization_history(study).write_image(optimisation_history_path)
-    #     optuna.visualization.plot_slice(study).write_image(slice_plot_path)
-    #     optuna.visualization.plot_parallel_coordinate(study).write_image(parallel_coordinate_plot_path)
-    #     optuna.visualization.plot_contour(study).write_image(contour_plot_path)
-    #     optuna.visualization.plot_param_importances(study).write_image(param_importances_plot_path)
+        optuna.visualization.plot_optimization_history(study).write_image(optimisation_history_path)
+        optuna.visualization.plot_slice(study).write_image(slice_plot_path)
+        optuna.visualization.plot_parallel_coordinate(study).write_image(parallel_coordinate_plot_path)
+        optuna.visualization.plot_contour(study).write_image(contour_plot_path)
+        optuna.visualization.plot_param_importances(study).write_image(param_importances_plot_path)
 
-    #     from PIL import Image
-    #     img = np.asarray(Image.open(slice_plot_path))
-    #     plt.imshow(img)
-    #     plt.axis('off')
-    #     plt.show()
+        from PIL import Image
+        img = np.asarray(Image.open(slice_plot_path))
+        plt.imshow(img)
+        plt.axis('off')
+        plt.show()
 
-    #     return study
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        return study
 
 
     def train(self):

@@ -67,8 +67,8 @@ if __name__ == '__main__':
               batch_size = BATCH_SIZE,
               model_folder=MODEL_FOLDER)
     
-    trainer.tune_hyperparameters(num_trials=10, 
-                                 num_traces = 1000, 
+    trainer.tune_hyperparameters(num_trials=5, 
+                                 num_traces = 200, 
                                  num_epochs = 5)
 
     # model_path, state_dict_best = trainer.train()
