@@ -227,7 +227,7 @@ def report_dataset_stats(dataset, dataset_name):
 
     print(f"{dataset_name} -> N: {len(labels)}, Labels: {unique_labels}, Label Counts: {label_counts}")
 
-def split_datasets(ml_data, ratio_train,val_test_split):
+def split_datasets(ml_data, ratio_train,val_test_split, n_nucleotide = None):
     
     train_dataset = {}
     validation_dataset = {}
@@ -239,16 +239,24 @@ def split_datasets(ml_data, ratio_train,val_test_split):
         train_dataset[key] = []
         validation_dataset[key] = []
         test_dataset[key] = []
-
-    for label in np.unique(ml_data["labels"]):
         
-        label_file_names = np.unique(np.extract(ml_data["labels"]==label,ml_data["file_names"]))
+    sort_array = np.vstack((ml_data["labels"], ml_data["n_nucleotide"])).T
+    
+    for sort_label, sort_nucleotide in np.unique(sort_array,axis=0):
+        
+        if n_nucleotide is not None:
+            if int(n_nucleotide) != int(sort_nucleotide):
+                continue
+
+        label_file_names = np.unique(np.extract((ml_data["labels"]==sort_label) &
+                                                (ml_data["n_nucleotide"]==sort_nucleotide),
+                                                ml_data["file_names"]))
         
         label_file_names = np.flip(label_file_names)
         
         train_files, test_files = train_test_split(label_file_names,
-                                                   train_size=ratio_train,
-                                                   shuffle=False)
+                                                    train_size=ratio_train,
+                                                    shuffle=False)
 
         test_indices = np.argwhere(np.isin(ml_data["file_names"],test_files)).flatten()
         
@@ -273,7 +281,6 @@ def split_datasets(ml_data, ratio_train,val_test_split):
                 train_dataset[key].extend(train_data)
                 validation_dataset[key].extend(validation_data)
                 
-            
     train_dataset = shuffle_dataset(train_dataset) 
     validation_dataset = shuffle_dataset(validation_dataset) 
     test_dataset = shuffle_dataset(test_dataset)

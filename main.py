@@ -37,12 +37,12 @@ NUM_WORKERS = 10
 MODEL_FOLDER = "TEST"
 
 
-ml_data = {"data":[],"labels":[],"n_nucleotide":[],"file_names":[]}
+# ml_data = {"data":[],"labels":[],"n_nucleotide":[],"file_names":[]}
 
-ml_data = import_gapseqml_data(r"data/3nt/comp",
-    label = 0, n_nucleotide=3, trace_length = 800, ml_data=ml_data)
-ml_data = import_gapseqml_data(r"data/3nt/noncomp",
-    label = 1, n_nucleotide=3, trace_length = 800, ml_data=ml_data)
+# ml_data = import_gapseqml_data(r"data/3nt/comp",
+#     label = 0, n_nucleotide=3, trace_length = 800, ml_data=ml_data)
+# ml_data = import_gapseqml_data(r"data/3nt/noncomp",
+#     label = 1, n_nucleotide=3, trace_length = 800, ml_data=ml_data)
 # ml_data = import_gapseqml_data(r"data/5nt/comp",
 #     label = 0, n_nucleotide=5, trace_length = 800, ml_data=ml_data)
 # ml_data = import_gapseqml_data(r"data/5nt/noncomp",
@@ -51,18 +51,17 @@ ml_data = import_gapseqml_data(r"data/3nt/noncomp",
 # with open('ml_data.pickle', 'wb') as handle:
 #     pickle.dump(ml_data, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-# with open('ml_data.pickle', 'rb') as handle:
-#     ml_data = pickle.load(handle)
+with open('ml_data.pickle', 'rb') as handle:
+    ml_data = pickle.load(handle)
 
 
 datasets = split_datasets(ml_data, ratio_train, val_test_split)
 train_dataset, validation_dataset, test_dataset = datasets
 
-# visualise_dataset(test_dataset, n_examples=5,
-#                   label=1, n_rows=6, n_cols=6)
+# # visualise_dataset(test_dataset, n_examples=5,
+# #                   label=1, n_rows=6, n_cols=6)
 
 if __name__ == '__main__':
-
 
     model = InceptionTime(1,len(np.unique(train_dataset["labels"]))).to(device)
 
