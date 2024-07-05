@@ -196,18 +196,18 @@ def import_gapseqml_data(paths, label = 0, n_nucleotide = 1, trace_length = 1000
 
 
 
-def shuffle_train_data(train_data):
+def shuffle_dataset(dataset):
       
-    dict_names = list(train_data.keys())     
-    dict_values = list(zip(*[value for key,value in train_data.items()]))
+    dict_names = list(dataset.keys())     
+    dict_values = list(zip(*[value for key,value in dataset.items()]))
     
     random.shuffle(dict_values)
     
     dict_values = list(zip(*dict_values))
     
-    train_data = {key:list(dict_values[index]) for index,key in enumerate(train_data.keys())}
+    dataset = {key:list(dict_values[index]) for index,key in enumerate(dataset.keys())}
     
-    return train_data
+    return dataset
                     
 
 def limit_train_data(train_data, num_files):
@@ -217,6 +217,15 @@ def limit_train_data(train_data, num_files):
         train_data[key] = value[:num_files]
         
     return train_data
+
+
+def report_dataset_stats(dataset, dataset_name):
+    
+    labels = dataset["labels"]
+
+    unique_labels, label_counts = np.unique(labels, return_counts=True)
+
+    print(f"{dataset_name} -> N: {len(labels)}, Labels: {unique_labels}, Label Counts: {label_counts}")
 
 def split_datasets(ml_data, ratio_train,val_test_split):
     
@@ -230,8 +239,7 @@ def split_datasets(ml_data, ratio_train,val_test_split):
         train_dataset[key] = []
         validation_dataset[key] = []
         test_dataset[key] = []
-        
-        
+
     for label in np.unique(ml_data["labels"]):
         
         label_file_names = np.unique(np.extract(ml_data["labels"]==label,ml_data["file_names"]))
@@ -240,13 +248,13 @@ def split_datasets(ml_data, ratio_train,val_test_split):
         
         train_files, test_files = train_test_split(label_file_names,
                                                    train_size=ratio_train,
-                                                   shuffle=True)
+                                                   shuffle=False)
 
         test_indices = np.argwhere(np.isin(ml_data["file_names"],test_files)).flatten()
         
         for key,value in ml_data.items():
             
-            test_data = ml_data[key][test_indices].tolist()
+            test_data = np.array(ml_data[key])[test_indices].tolist()
             test_dataset[key].extend(test_data)
         
         for file_name in train_files:
@@ -266,9 +274,13 @@ def split_datasets(ml_data, ratio_train,val_test_split):
                 validation_dataset[key].extend(validation_data)
                 
             
-    train_dataset = shuffle_train_data(train_dataset) 
-    validation_dataset = shuffle_train_data(validation_dataset) 
-    test_dataset = shuffle_train_data(test_dataset)
+    train_dataset = shuffle_dataset(train_dataset) 
+    validation_dataset = shuffle_dataset(validation_dataset) 
+    test_dataset = shuffle_dataset(test_dataset)
+
+    report_dataset_stats(train_dataset, "Train")
+    report_dataset_stats(validation_dataset, "Val  ")
+    report_dataset_stats(test_dataset, "Test ")
 
     return train_dataset, validation_dataset, test_dataset
 

@@ -191,6 +191,50 @@ class Trainer:
             plt.close()
         
     
+    def visualise_dataset(self, n_examples = 1, label = 1, n_rows = 3, n_cols = 3, 
+                          save_plots=True, show_plots=False):
+
+        data = np.array(self.train_dataset["data"])
+        labels = np.array(self.train_dataset["labels"])
+
+        if label in labels:
+            label_indices = np.argwhere(labels==label).flatten()
+
+            vis_data = data[label_indices]
+            vis_labels = labels[label_indices]
+        else:
+            vis_data = data
+            vis_labels = labels
+            
+        dataset = load_dataset(data=vis_data.tolist(),
+                               labels=vis_labels.tolist(),
+                               augment=False)
+        dataloader = DataLoader(dataset=dataset, 
+                                batch_size=n_cols*n_rows,
+                                shuffle=True)
+        
+        for _ in range(n_examples):
+            
+            plot_data = []
+            
+            for data, labels in dataloader:
+                
+                dat = np.squeeze(data).tolist()
+                plot_data.extend(dat)
+                
+            fig, ax = plt.subplots(n_rows, n_cols, figsize=(18, 10))
+            for i in range(n_rows):
+                for j in range(n_cols):
+                    index = i * n_rows + j
+                    ax[i, j].plot(plot_data[index], color='blue')
+                    ax[i, j].axis('off')
+                
+            fig.tight_layout()
+            plt.show()
+                
+        return vis_labels, vis_data
+        
+    
     def correct_predictions(self, label, pred_label):
     
         if len(label.shape) > 1:
@@ -365,6 +409,8 @@ class Trainer:
                         'validation_loss': self.validation_loss,
                         'training_accuracy': self.training_accuracy,
                         'validation_accuracy': self.validation_accuracy,
+                        'learning_rate': self.learning_rate,
+                        'batch_size': self.batch_size,
                         'learning_rates': self.learning_rates,
                         }, self.model_path)
 
@@ -378,7 +424,7 @@ class Trainer:
         train_losses = []  # accumulate the losses here
         train_accuracies = []
 
-        batch_iter = tqdm.tqdm(enumerate(self.trainloader), 'Training', total=len(self.trainloader), position=1, leave=True)
+        batch_iter = tqdm.tqdm(enumerate(self.trainloader), 'Training', total=len(self.trainloader), position=0, leave=False)
 
         for i, (images, labels) in batch_iter:
             images, labels = images.to(self.device), labels.to(self.device)  # send to device (GPU or CPU)
@@ -398,7 +444,7 @@ class Trainer:
             current_lr = self.optimizer.param_groups[0]['lr']
 
             batch_iter.set_description(
-                f'Training: (loss {np.mean(train_losses):.5f}, Acc {np.mean(train_accuracies):.2f} LR {current_lr})')  # update progressbar
+                f'Training: (Epoch: {self.epoch}/{self.epochs} loss: {np.mean(train_losses):.3f}, Acc: {np.mean(train_accuracies):.2f} LR: {current_lr})')  # update progressbar
 
         self.training_loss.append(np.mean(train_losses))
         self.training_accuracy.append(np.mean(train_accuracies))
@@ -412,7 +458,7 @@ class Trainer:
         valid_losses = []  # accumulate the losses here
         valid_accuracies = []
 
-        batch_iter = tqdm.tqdm(enumerate(self.valoader), 'Validation', total=len(self.valoader), position=1, leave=True)
+        batch_iter = tqdm.tqdm(enumerate(self.valoader), 'Validation', total=len(self.valoader), position=0, leave=False)
 
         for i, (images, labels) in batch_iter:
             images, labels = images.to(self.device), labels.to(self.device)  # send to device (GPU or CPU)
@@ -429,7 +475,7 @@ class Trainer:
                 current_lr = self.optimizer.param_groups[0]['lr']
 
                 batch_iter.set_description(
-                    f'Validation: (loss {np.mean(valid_losses):.5f}, Acc {np.mean(valid_accuracies):.2f} LR {current_lr})')  # update progressbar
+                    f'Validation: (Epoch: {self.epoch}/{self.epochs} loss: {np.mean(valid_losses):.3f}, Acc: {np.mean(valid_accuracies):.2f} LR: {current_lr})')  # update progressbar
 
         self.validation_loss.append(np.mean(valid_losses))
         self.validation_accuracy.append(np.mean(valid_accuracies))

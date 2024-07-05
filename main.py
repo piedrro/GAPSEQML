@@ -15,6 +15,7 @@ import sklearn
 import pickle
 
 from gapseqml.fileIO import import_gapseqml_data, split_datasets
+from gapseqml.visualise import visualise_dataset
 from gapseqml.trainer import Trainer
 
 # device
@@ -47,15 +48,18 @@ ml_data = import_gapseqml_data(r"data/3nt/noncomp",
 # ml_data = import_gapseqml_data(r"data/5nt/noncomp",
 #     label = 1, n_nucleotide=5, trace_length = 800, ml_data=ml_data)
 
-with open('ml_data.pickle', 'wb') as handle:
-    pickle.dump(ml_data, handle, protocol=pickle.HIGHEST_PROTOCOL)
+# with open('ml_data.pickle', 'wb') as handle:
+#     pickle.dump(ml_data, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-with open('ml_data.pickle', 'rb') as handle:
-    ml_data = pickle.load(handle)
+# with open('ml_data.pickle', 'rb') as handle:
+#     ml_data = pickle.load(handle)
 
 
 datasets = split_datasets(ml_data, ratio_train, val_test_split)
 train_dataset, validation_dataset, test_dataset = datasets
+
+# visualise_dataset(test_dataset, n_examples=5,
+#                   label=1, n_rows=6, n_cols=6)
 
 if __name__ == '__main__':
 
@@ -81,18 +85,14 @@ if __name__ == '__main__':
               batch_size = BATCH_SIZE,
               model_folder=MODEL_FOLDER)
     
-    trainer.visualise_augmentations(n_examples=5,
-                                    show_plots=True,
-                                    save_plots = True)
+    # trainer.visualise_augmentations(n_examples=5,
+    #                                 show_plots=True,
+    #                                 save_plots = True)
     
-    trainer.tune_hyperparameters(num_trials=5, 
-                                  num_traces = 200, 
-                                  num_epochs = 5)
+    # trainer.tune_hyperparameters(num_trials=5, 
+    #                               num_traces = 200, 
+    #                               num_epochs = 5)
     
     model_path, state_dict_best = trainer.train()
-    
     model_data = trainer.evaluate(test_dataset, model_path)
-    
-    
-    
     
