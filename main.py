@@ -14,7 +14,7 @@ import traceback
 import sklearn
 import pickle
 
-from gapseqml.fileIO import import_gapseqml_data, split_datasets
+from gapseqml.fileIO import import_gapseqml_data, split_datasets, import_json_datasets
 from gapseqml.visualise import visualise_dataset
 from gapseqml.trainer import Trainer
 
@@ -27,22 +27,28 @@ else:
     device = torch.device('cpu')
 
 
-ratio_train = 0.8
-val_test_split = 0.8
+ratio_train = 0.9
+val_test_split = 0.9
 BATCH_SIZE = 10
 LEARNING_RATE = 0.001
-EPOCHS = 3
+EPOCHS = 10
 AUGMENT = True
 NUM_WORKERS = 10
-MODEL_FOLDER = "TEST"
+MODEL_FOLDER = "GAPSEQML"
 
 
-# ml_data = {"data":[],"labels":[],"n_nucleotide":[],"file_names":[]}
+ml_data = {"data":[],"labels":[],"n_nucleotide":[],"file_names":[]}
 
-# ml_data = import_gapseqml_data(r"data/3nt/comp",
-#     label = 0, n_nucleotide=3, trace_length = 800, ml_data=ml_data)
-# ml_data = import_gapseqml_data(r"data/3nt/noncomp",
-#     label = 1, n_nucleotide=3, trace_length = 800, ml_data=ml_data)
+# ml_data = import_gapseqml_data(r"data/train/1nt/comp",
+#     label = 0, n_nucleotide=1, trace_length = 800, ml_data=ml_data)
+# ml_data = import_gapseqml_data(r"data/train/1nt/noncomp",
+#     label = 1, n_nucleotide=1, trace_length = 800, ml_data=ml_data)
+
+ml_data = import_gapseqml_data(r"data/train/3nt/comp",
+    label = 0, n_nucleotide=3, trace_length = 800, ml_data=ml_data)
+ml_data = import_gapseqml_data(r"data/train/3nt/noncomp",
+    label = 1, n_nucleotide=3, trace_length = 800, ml_data=ml_data)
+
 # ml_data = import_gapseqml_data(r"data/5nt/comp",
 #     label = 0, n_nucleotide=5, trace_length = 800, ml_data=ml_data)
 # ml_data = import_gapseqml_data(r"data/5nt/noncomp",
@@ -51,47 +57,63 @@ MODEL_FOLDER = "TEST"
 # with open('ml_data.pickle', 'wb') as handle:
 #     pickle.dump(ml_data, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-with open('ml_data.pickle', 'rb') as handle:
-    ml_data = pickle.load(handle)
+# with open('ml_data.pickle', 'rb') as handle:
+#     ml_data = pickle.load(handle)
 
-
-datasets = split_datasets(ml_data, ratio_train, val_test_split)
-train_dataset, validation_dataset, test_dataset = datasets
-
-# # visualise_dataset(test_dataset, n_examples=5,
-# #                   label=1, n_rows=6, n_cols=6)
+timestamp = datetime.now().strftime("%y%m%d_%H%M")
 
 if __name__ == '__main__':
 
-    model = InceptionTime(1,len(np.unique(train_dataset["labels"]))).to(device)
+    datasets = split_datasets(ml_data, ratio_train, val_test_split)
+    train_dataset, validation_dataset, test_dataset = datasets
+
+    MODEL_FOLDER = f"gapseqml"
+
+    model = InceptionTime(1,2).to(device)
 
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
-    timestamp = datetime.now().strftime("%y%m%d_%H%M")
 
-    trainer = Trainer(model=model,
-              device=device,
-              optimizer=optimizer,
-              criterion=criterion,
-              train_dataset=train_dataset,
-              validation_dataset=validation_dataset,
-              test_dataset=test_dataset,
-              lr_scheduler=scheduler,
-              tensorboard=True,
-              epochs=EPOCHS,
-              learning_rate = LEARNING_RATE,
-              batch_size = BATCH_SIZE,
-              model_folder=MODEL_FOLDER)
-    
+    trainer = Trainer(
+        model=model,
+        device=device,
+        optimizer=optimizer,
+        criterion=criterion,
+        train_dataset=train_dataset,
+        validation_dataset=validation_dataset,
+        test_dataset=test_dataset,
+        lr_scheduler=scheduler,
+        tensorboard=True,
+        epochs=EPOCHS,
+        learning_rate = LEARNING_RATE,
+        timestamp=timestamp,
+        batch_size = BATCH_SIZE,
+        model_folder=MODEL_FOLDER)
+
     # trainer.visualise_augmentations(n_examples=5,
     #                                 show_plots=True,
     #                                 save_plots = True)
-    
-    # trainer.tune_hyperparameters(num_trials=5, 
-    #                               num_traces = 200, 
+    #
+    # trainer.tune_hyperparameters(num_trials=5,
+    #                               num_traces = 200,
     #                               num_epochs = 5)
+
+    # model_path, state_dict_best = trainer.train()
     
-    model_path, state_dict_best = trainer.train()
-    model_data = trainer.evaluate(test_dataset, model_path)
+    model_path = r"C:\Users\turnerp\PycharmProjects\gapseqml\models\gapseqml_240711_1542\inceptiontime_model_240711_1542"
+
+    # model_path = r"C:\Users\turnerp\PycharmProjects\gapseqml\models\gapseqml_240711_0939\inceptiontime_model_240711_0939"
+    json_dir = r"C:\Users\turnerp\PycharmProjects\gapseqml\data\predict\3nt"
     
+    json_datasets = import_json_datasets(json_dir, json_channel="donor")
+    
+    # with open('json_datasets.pickle', 'wb') as handle:
+    #     pickle.dump(json_datasets, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    # with open('json_datasets.pickle', 'rb') as handle:
+    #     json_datasets = pickle.load(handle)
+                                         
+    predictions = trainer.predict_json(json_datasets, model_path=model_path)
+
+    # model_data = trainer.evaluate(test_dataset, model_path)

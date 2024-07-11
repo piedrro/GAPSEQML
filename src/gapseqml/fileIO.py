@@ -144,7 +144,7 @@ def import_gapseqml_data(paths, label = 0, n_nucleotide = 1, trace_length = 1000
                      "user_label","nucleotide_label","import_path"]
     
     n_imported = 0
-    
+
     if len(path_list) > 0:
         
         for path in path_list:
@@ -198,7 +198,14 @@ def import_gapseqml_data(paths, label = 0, n_nucleotide = 1, trace_length = 1000
 
 def shuffle_dataset(dataset):
       
-    dict_names = list(dataset.keys())     
+    dict_names = list(dataset.keys())
+
+    if "data" not in dict_names:
+        return dataset
+
+    if len(dataset["data"]) == 0:
+        return dataset
+
     dict_values = list(zip(*[value for key,value in dataset.items()]))
     
     random.shuffle(dict_values)
@@ -227,7 +234,7 @@ def report_dataset_stats(dataset, dataset_name):
 
     print(f"{dataset_name} -> N: {len(labels)}, Labels: {unique_labels}, Label Counts: {label_counts}")
 
-def split_datasets(ml_data, ratio_train,val_test_split, n_nucleotide = None):
+def split_datasets(ml_data, ratio_train, val_test_split, n_nucleotide = None, test = False):
     
     train_dataset = {}
     validation_dataset = {}
@@ -253,18 +260,23 @@ def split_datasets(ml_data, ratio_train,val_test_split, n_nucleotide = None):
                                                 ml_data["file_names"]))
         
         label_file_names = np.flip(label_file_names)
-        
-        train_files, test_files = train_test_split(label_file_names,
-                                                    train_size=ratio_train,
-                                                    shuffle=False)
 
-        test_indices = np.argwhere(np.isin(ml_data["file_names"],test_files)).flatten()
+        if test:
         
-        for key,value in ml_data.items():
-            
-            test_data = np.array(ml_data[key])[test_indices].tolist()
-            test_dataset[key].extend(test_data)
-        
+            train_files, test_files = train_test_split(label_file_names,
+                                                        train_size=ratio_train,
+                                                        shuffle=False)
+
+            test_indices = np.argwhere(np.isin(ml_data["file_names"],test_files)).flatten()
+
+            for key,value in ml_data.items():
+
+                test_data = np.array(ml_data[key])[test_indices].tolist()
+                test_dataset[key].extend(test_data)
+
+        else:
+            train_files = label_file_names
+
         for file_name in train_files:
             
             indices = np.argwhere(ml_data["file_names"]==file_name).flatten()
@@ -290,6 +302,95 @@ def split_datasets(ml_data, ratio_train,val_test_split, n_nucleotide = None):
     report_dataset_stats(test_dataset, "Test ")
 
     return train_dataset, validation_dataset, test_dataset
+
+
+
+
+def import_json_datasets(json_dir, json_channel, user_label=None):
+    
+    if json_channel.lower() in ["donor", "acceptor"]:
+        json_channel = json_channel.capitalize()
+    elif json_channel.lower() in ["dd","da","aa","ad"]:
+        json_channel = json_channel.upper()
+    else:
+        print(f"json_channel must be in [Donor,Acceptor,DD,DA,AA,AD]")
+    
+    if os.path.exists(json_dir) == False:
+        print("json_dir does not exist")
+        return []
+    
+    json_channel = "Donor"
+
+    json_files = glob(json_dir + "*\**\*.json", recursive=True)
+    
+    json_datasets = []
+    
+    for path in json_files:
+        
+        try:
+        
+            json_dataset = {"data":[], "file_names":[]}
+            
+            file_name = os.path.basename(path)
+            
+            import_data = json.load(open(path, "r"))
+            
+            import_dict = {}
+        
+            for dataset_name, dataset_data in import_data["data"].items():
+                
+                if dataset_name not in import_dict.keys():
+                    import_dict[dataset_name] = []
+                
+                for dat in dataset_data:
+                    
+                    try:
+                
+                        if json_channel not in dat.keys():
+                            continue
+                        
+                        if user_label is not None:
+                            if dat["user_label"] is not user_label:
+                                continue
+                            
+                        import_dict[dataset_name].append(dat[json_channel])
+                        
+                    except:
+                        print(traceback.format_exc())
+                        pass
+                    
+            import_file_names = list(import_dict.keys())
+            import_data = list(import_dict.values())
+            
+            import_data = [list(item) for item in zip(*import_data)]
+            
+            if import_data == []:
+                continue
+            
+            json_dataset["data"] = import_data
+            json_dataset["file_names"] = import_file_names
+            json_dataset["json_file"] = file_name
+            
+            json_datasets.append(json_dataset)
+    
+        except:
+            print(traceback.format_exc())
+            pass
+        
+    return json_datasets
+
+
+
+
+# json_dir = r"C:\Users\turnerp\PycharmProjects\gapseqml\data\predict"
+
+
+# json_datasets = import_json_datasets(json_dir, 
+#                                      json_channel="donor", 
+#                                      user_label=0)
+
+
+
 
 
 

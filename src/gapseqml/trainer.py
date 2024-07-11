@@ -1,4 +1,3 @@
-
 import numpy as np
 import torch
 import tqdm
@@ -12,14 +11,16 @@ from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
 import copy
 import warnings
-
+import pandas as pd
 from torch.utils.data import DataLoader
 import torch.optim as optim
 import optuna
 import traceback
 import pathlib
 from gapseqml.dataloader import load_dataset
-from gapseqml.visualise import plot_evaluation_visualisations
+from gapseqml.visualise import plot_evaluation_visualisations, plot_training_graphs
+from gapseqml.fileIO import import_json_datasets
+from sklearn.metrics import balanced_accuracy_score
 
 class Trainer:
 
@@ -35,6 +36,7 @@ class Trainer:
                  learning_rate: float = None,
                  batch_size: int = None,
                  lr_scheduler: torch.optim.lr_scheduler = None,
+                 n_nucleotide = None,
                  tensorboard=bool,
                  epochs: int = 100,
                  kfolds: int = 0,
@@ -70,6 +72,7 @@ class Trainer:
         self.kfolds = kfolds
         self.fold = fold
         self.timestamp = timestamp
+        self.n_nucleotide = n_nucleotide
         self.best_epoch = 0
         self.best_model_weights = None
         
@@ -100,16 +103,25 @@ class Trainer:
         
         if hasattr(self, "train_dataset"):
             
+            if self.train_dataset == {}:
+                return
+            
             self.initialise_dataloader(self.train_dataset, "trainloader", 
                                        augment=True, batch_size=self.batch_size)
         
 
         if hasattr(self, "validation_dataset"):
+            
+            if self.validation_dataset == {}:
+                return
 
             self.initialise_dataloader(self.validation_dataset, "valoader", 
                                        augment=False, batch_size=self.batch_size)
             
         if hasattr(self, "test_dataset"):
+            
+            if self.test_dataset == {}:
+                return
 
             self.initialise_dataloader(self.test_dataset, "testloader", 
                                        augment=False, batch_size=self.batch_size)
@@ -119,6 +131,9 @@ class Trainer:
                               augment = False, batch_size = 10, shuffle=True):
         
         try:
+            
+            if dataset == {}:
+                return None
         
             dataset = load_dataset(data = dataset["data"],
                                labels = dataset["labels"],
@@ -129,9 +144,7 @@ class Trainer:
                                     shuffle=False)
             
             setattr(self, name, dataloader)
-            
-            print(f"initialised {name} dataloader")
-            
+
             n_images = len(dataloader)*batch_size
             setattr(self, f"num_{name.replace('loader','')}_images", n_images)
             
@@ -412,10 +425,18 @@ class Trainer:
                         'learning_rate': self.learning_rate,
                         'batch_size': self.batch_size,
                         'learning_rates': self.learning_rates,
+                        'n_nucleotide':self.n_nucleotide,
                         }, self.model_path)
 
             progressbar.set_description(
                 f'(Training Loss {self.training_loss[-1]:.5f}, Validation Loss {self.validation_loss[-1]:.5f})')  # update progressbar
+
+        progressbar.close()
+
+        model_data = torch.load(self.model_path)
+        plot_training_graphs(model_data, self.model_path)
+
+        print(f"Training complete. Model saved to {self.model_path}")
 
         return self.model_path, self.best_model_weights
 
@@ -530,6 +551,7 @@ class Trainer:
         batch_iter.close()  
         
         test_accuracy = np.sum(np.array(pred_labels) == np.array(true_labels))/len(pred_labels)
+        test_balanced_accuracy = balanced_accuracy_score(true_labels, pred_labels)
         
         pred_confidences = np.array(pred_confidences).max(axis=-1).tolist()
         
@@ -541,6 +563,7 @@ class Trainer:
         model_data["test_results"]["true_labels"] = true_labels
         model_data["test_results"]["pred_labels"] = pred_labels
         model_data["test_results"]["test_accuracy"] = test_accuracy
+        model_data["test_results"]["test_balanced_accuracy"] = test_balanced_accuracy
         model_data["test_results"]["test_data"] = test_data
         model_data["test_results"]["pred_confidences"] = pred_confidences
         
@@ -549,4 +572,150 @@ class Trainer:
         
         return model_data
 
+
+
+    def plot_batch(self, data, labels, confidence_scores):
+        
+        data = data.cpu().numpy()
+        
+        fig, axs = plt.subplots(4, 1, figsize=(8, 12))
+    
+        for i in range(4):
+            
+            axes_label = labels[i]
+            axes_confidence = confidence_scores[i]
+            label = f"label:{axes_label}, confidence:{axes_confidence:.3f}"
+            axs[i].plot(data[i][0], label=label)
+            axs[i].legend()
+            
+        plt.show()
+
+
+    def rescale01(self, X):
+            
+        X = (X - np.min(X)) / (np.max(X) - np.min(X))
+            
+        return X
+
+    def predict_json(self, json_datasets, target_label=0, model_path = None):
+        
+        if len(json_datasets) == 0:
+            return None
+        
+        print(f"imported {len(json_datasets)} datasets")
+    
+        if model_path is not None:
+            if os.path.isfile(model_path) == True:
+                
+                self.model_path = model_path
+                
+                model_data = torch.load(model_path)
+                model_weights = model_data['model_state_dict']
+                self.model.load_state_dict(model_weights)
+                
+                model_name = os.path.basename(model_path)
+                
+                print(f"loaded model: {model_name}")
+                
+        json_predictions = {}    
+        self.model.eval()
+      
+        for json_dataset in json_datasets:
+            
+            json_data = json_dataset["data"]
+            json_file_names = json_dataset["file_names"]
+            json_file = json_dataset["json_file"]
+            
+            json_predictions[json_file] = {}
+            
+            pred_labels_list = []
+            pred_confidence_list = []
+            pred0_confidence_list = []
+            pred1_confidence_list = []
+            
+            batch_iter = tqdm.tqdm(json_data, 'Predicting', 
+                                   total=len(json_data), position=1, leave=True, disable=False)
+            
+            for i, traces in enumerate(batch_iter):
+                
+                traces = [self.rescale01(trace) for trace in traces]
+                
+                traces = np.array(traces)
+                traces = np.expand_dims(traces,axis=1)
+                traces = torch.from_numpy(traces).float()
+                
+                traces = traces.to(self.device)
+                
+                with torch.no_grad():
+                    
+                    pred_label = self.model(traces)
+                    
+                    # Calculate confidence scores using softmax
+                    pred_confidences = torch.nn.functional.softmax(pred_label, dim=1)
+                    
+                    # Get the predicted labels and their confidence scores
+                    pred_labels = torch.argmax(pred_confidences, dim=1)
+                    pred_confidence_scores = pred_confidences[range(pred_confidences.shape[0]), pred_labels]
+                
+                    # Convert to list if necessary
+                    pred_labels = pred_labels.cpu().numpy().tolist()
+                    pred_confidence_scores = pred_confidence_scores.cpu().numpy().tolist()
+                
+                    label0_confidence_scores = pred_confidences[:, 0]
+                    label1_confidence_scores = pred_confidences[:, 1]
+                    
+                    num_above_threshold = torch.sum(label1_confidence_scores > 0.6).item()
+                    
+                    if pred_labels == [0,0,0,0]:
+                        continue
+                    
+                    if num_above_threshold < 2:
+                        continue
+                        
+                    if int(torch.sum(label1_confidence_scores > 0.1).item()) > 3:
+                        continue
+                    
+                    self.plot_batch(traces, pred_labels, pred_confidence_scores)
+                    
+                    label0_confidence_scores = label0_confidence_scores.cpu().numpy().tolist()
+                    label1_confidence_scores = label1_confidence_scores.cpu().numpy().tolist()
+                    
+                    pred_labels_list.append(pred_labels) 
+                    pred_confidence_list.append(pred_confidence_scores)
+                    pred0_confidence_list.append(label0_confidence_scores)
+                    pred1_confidence_list.append(label1_confidence_scores)
+                    
+            
+            pred_labels_list = np.array(pred_labels_list)
+            pred_confidence_list = np.array(pred_confidence_list)
+            pred0_confidence_list = np.array(pred0_confidence_list)
+            pred1_confidence_list = np.array(pred1_confidence_list)
+            
+            pred_labels_list = pd.DataFrame(pred_labels_list, columns=json_file_names)
+            pred_confidence_list = pd.DataFrame(pred_confidence_list, columns=json_file_names)
+            pred0_confidence_list = pd.DataFrame(pred0_confidence_list, columns=json_file_names)
+            pred1_confidence_list = pd.DataFrame(pred1_confidence_list, columns=json_file_names)
+            
+            json_predictions[json_file]["pred_labels"] = pred_labels_list
+            json_predictions[json_file]["pred_confidence"] = pred_confidence_list
+            json_predictions[json_file]["pred0_confidence"] = pred0_confidence_list
+            json_predictions[json_file]["pred1_confidence"] = pred1_confidence_list
+            
+            break
+                     
+        return json_predictions
+        
+        
+                    
+                
+                
+            
+
+                
+        
+        
+            
+        
+        
+        
         

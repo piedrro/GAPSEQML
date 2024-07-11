@@ -122,8 +122,6 @@ def plot_evaluation_visualisations(model_data, save_path,
     class_labels = ["Comp","Non-Comp"]
     
     cm_path = save_path + "_confusion_matrix.tif"
-    loss_graph_path = save_path + "_loss_graph.tif"
-    accuracy_graph_path = save_path + "_accuracy_graph.tif"
 
     plot_confusion_matrix(true_labels, pred_labels, class_labels, 
                           save_path = cm_path)
@@ -131,31 +129,38 @@ def plot_evaluation_visualisations(model_data, save_path,
     plot_confidence_plots(model_data, save_path=save_path)
     
     plot_prediction_histograms(model_data, save_path=save_path)
+
+    plot_training_graphs(model_data, save_path)
     
-    train_loss = model_data["training_loss"]
-    validation_loss = model_data["validation_loss"]
-    train_accuracy = model_data["training_accuracy"]
-    validation_accuracy = model_data["validation_accuracy"]
+
     
-    plt.plot(train_loss, label="training loss")
-    plt.plot(validation_loss, label="validation loss")
-    plt.xlabel("Epochs")
-    plt.ylabel("Binary Cross Entropy Loss")
-    plt.legend(loc="upper right")
-    plt.savefig(loss_graph_path, bbox_inches='tight', dpi=300)
-    plt.show()
-    plt.close()
-    
-    plt.plot(train_accuracy, label="training accuracy")
-    plt.plot(validation_accuracy, label="validation accuracy")
-    plt.xlabel("Epochs")
-    plt.ylabel("Accuracy (%)")
-    plt.legend(loc="lower right")
-    plt.savefig(accuracy_graph_path, bbox_inches='tight', dpi=300)
-    plt.show()
-    plt.close()
-    
-    
+def plot_training_graphs(model_data, save_path):
+
+        train_loss = model_data["training_loss"]
+        validation_loss = model_data["validation_loss"]
+        train_accuracy = model_data["training_accuracy"]
+        validation_accuracy = model_data["validation_accuracy"]
+
+        loss_graph_path = save_path + "_loss_graph.tif"
+        accuracy_graph_path = save_path + "_accuracy_graph.tif"
+
+        plt.plot(train_loss, label="training loss")
+        plt.plot(validation_loss, label="validation loss")
+        plt.xlabel("Epochs")
+        plt.ylabel("Binary Cross Entropy Loss")
+        plt.legend(loc="upper right")
+        plt.savefig(loss_graph_path, bbox_inches='tight', dpi=300)
+        plt.show()
+        plt.close()
+
+        plt.plot(train_accuracy, label="training accuracy")
+        plt.plot(validation_accuracy, label="validation accuracy")
+        plt.xlabel("Epochs")
+        plt.ylabel("Accuracy (%)")
+        plt.legend(loc="lower right")
+        plt.savefig(accuracy_graph_path, bbox_inches='tight', dpi=300)
+        plt.show()
+        plt.close()
 
 def get_confidence_indices(pred_confidences, pred_labels, true_labels):
     

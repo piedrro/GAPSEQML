@@ -73,7 +73,7 @@ version = {attr = "gapseqml.__init__.__version__"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-"*" = ["*.yaml","*.dll"]
+"*" = ["*.yaml","*.dll","*.txt","*.json"]
 
 [tool.black]
 line-length = 79
