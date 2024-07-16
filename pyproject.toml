@@ -41,6 +41,10 @@ dependencies = [
     "optuna",
     "plotly",
     "kaleido",
+    "pomegranate==0.14.8",
+    "hmmlearn",
+    "parmap",
+    "retrying",
 ]
 
 [project.optional-dependencies]

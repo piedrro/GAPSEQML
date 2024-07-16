@@ -38,6 +38,7 @@ class Trainer:
                  lr_scheduler: torch.optim.lr_scheduler = None,
                  n_nucleotide = None,
                  tensorboard=bool,
+                 num_classes: int = 2,
                  epochs: int = 100,
                  kfolds: int = 0,
                  fold: int = 0,
@@ -75,6 +76,7 @@ class Trainer:
         self.n_nucleotide = n_nucleotide
         self.best_epoch = 0
         self.best_model_weights = None
+        self.num_classes = num_classes
         
         if os.path.exists(save_dir):
             self.model_dir = os.path.join(save_dir,"models", model_folder + "_" + self.timestamp)
@@ -134,9 +136,10 @@ class Trainer:
             
             if dataset == {}:
                 return None
-        
+                     
             dataset = load_dataset(data = dataset["data"],
                                labels = dataset["labels"],
+                               num_classes=self.num_classes,
                                augment=augment)
     
             dataloader = DataLoader(dataset=dataset,
@@ -175,10 +178,12 @@ class Trainer:
             
             augmented_traces = []
             
-            for data, _ in dataloader:
+            for data, label in dataloader:
 
                 data = data[0][0].numpy()
                 augmented_traces.append(data)
+                
+            label_index = int(label.argmax().numpy())
                 
             fig, ax = plt.subplots(3, 3, figsize=(18, 10))
             for i in range(3):
@@ -190,7 +195,7 @@ class Trainer:
                         ax[i, j].plot(augmented_traces[index], color='blue')
                     ax[i, j].axis('off')
             
-            fig.suptitle('Example Augmentations', fontsize=16)
+            fig.suptitle(f'Example Augmentations, label:{label_index}', fontsize=16)
             fig.tight_layout()
 
             if save_plots:
@@ -518,7 +523,7 @@ class Trainer:
             model_data = {}
             
         if test_dataset is not None:
-            self.initialise_dataloader(self.test_dataset, "testloader", 
+            self.testloader = self.initialise_dataloader(test_dataset, "testloader", 
                                        augment=False, batch_size=self.batch_size)
             
         self.model.eval()  # evaluation mode
@@ -597,7 +602,7 @@ class Trainer:
             
         return X
 
-    def predict_json(self, json_datasets, target_label=0, model_path = None):
+    def predict_json(self, json_datasets, target_label=0, model_path = None, sensitive = False):
         
         if len(json_datasets) == 0:
             return None
@@ -605,6 +610,9 @@ class Trainer:
         print(f"imported {len(json_datasets)} datasets")
     
         if model_path is not None:
+            
+            model_name = os.path.basename(model_path)
+            
             if os.path.isfile(model_path) == True:
                 
                 self.model_path = model_path
@@ -613,9 +621,11 @@ class Trainer:
                 model_weights = model_data['model_state_dict']
                 self.model.load_state_dict(model_weights)
                 
-                model_name = os.path.basename(model_path)
-                
                 print(f"loaded model: {model_name}")
+                
+            else:
+                print(f"could not not :{model_name}")
+                
                 
         json_predictions = {}    
         self.model.eval()
@@ -630,11 +640,12 @@ class Trainer:
             
             pred_labels_list = []
             pred_confidence_list = []
-            pred0_confidence_list = []
-            pred1_confidence_list = []
-            
+            trace_prediction = []
+            n_fail = 0
+            n_predictions = 0
+
             batch_iter = tqdm.tqdm(json_data, 'Predicting', 
-                                   total=len(json_data), position=1, leave=True, disable=False)
+                                    total=len(json_data), position=1, leave=True, disable=False)
             
             for i, traces in enumerate(batch_iter):
                 
@@ -658,51 +669,38 @@ class Trainer:
                     pred_confidence_scores = pred_confidences[range(pred_confidences.shape[0]), pred_labels]
                 
                     # Convert to list if necessary
-                    pred_labels = pred_labels.cpu().numpy().tolist()
-                    pred_confidence_scores = pred_confidence_scores.cpu().numpy().tolist()
-                
-                    label0_confidence_scores = pred_confidences[:, 0]
-                    label1_confidence_scores = pred_confidences[:, 1]
+                    pred_labels = pred_labels.cpu().numpy()
+                    pred_confidence_scores = pred_confidence_scores.cpu().numpy()
                     
-                    num_above_threshold = torch.sum(label1_confidence_scores > 0.6).item()
-                    
-                    if pred_labels == [0,0,0,0]:
+                    # 3 traces are labelled as 3, continue
+                    if np.sum(pred_labels == 2) != 3:
+                        n_fail +=1
                         continue
                     
-                    if num_above_threshold < 2:
-                        continue
-                        
-                    if int(torch.sum(label1_confidence_scores > 0.1).item()) > 3:
-                        continue
+                    prediction_index = int(np.argwhere(pred_labels != 2))
+                    prediction_label = pred_labels[prediction_index]
+                    prediction_confidence = pred_confidence_scores[prediction_index]
+                    n_predictions += 1
                     
-                    self.plot_batch(traces, pred_labels, pred_confidence_scores)
+                    # self.plot_batch(traces, pred_labels, pred_confidence_scores)
                     
-                    label0_confidence_scores = label0_confidence_scores.cpu().numpy().tolist()
-                    label1_confidence_scores = label1_confidence_scores.cpu().numpy().tolist()
-                    
-                    pred_labels_list.append(pred_labels) 
-                    pred_confidence_list.append(pred_confidence_scores)
-                    pred0_confidence_list.append(label0_confidence_scores)
-                    pred1_confidence_list.append(label1_confidence_scores)
-                    
-            
+                    pred_labels_list.append(list(pred_labels))
+                    pred_confidence_list.append(list(pred_confidence_scores))
+                    trace_prediction.append([prediction_index,prediction_label,prediction_confidence])
+                      
             pred_labels_list = np.array(pred_labels_list)
             pred_confidence_list = np.array(pred_confidence_list)
-            pred0_confidence_list = np.array(pred0_confidence_list)
-            pred1_confidence_list = np.array(pred1_confidence_list)
+            trace_prediction = np.array(trace_prediction)
             
-            pred_labels_list = pd.DataFrame(pred_labels_list, columns=json_file_names)
-            pred_confidence_list = pd.DataFrame(pred_confidence_list, columns=json_file_names)
-            pred0_confidence_list = pd.DataFrame(pred0_confidence_list, columns=json_file_names)
-            pred1_confidence_list = pd.DataFrame(pred1_confidence_list, columns=json_file_names)
-            
+            trace_prediction = pd.DataFrame(trace_prediction, 
+                                            columns = ["index","label","confidence"])
+
             json_predictions[json_file]["pred_labels"] = pred_labels_list
             json_predictions[json_file]["pred_confidence"] = pred_confidence_list
-            json_predictions[json_file]["pred0_confidence"] = pred0_confidence_list
-            json_predictions[json_file]["pred1_confidence"] = pred1_confidence_list
+            json_predictions[json_file]["trace_prediction"] = trace_prediction
+            json_predictions[json_file]["n_fail"] = n_fail
+            json_predictions[json_file]["n_predictions"] = n_predictions
             
-            break
-                     
         return json_predictions
         
         

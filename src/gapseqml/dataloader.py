@@ -30,10 +30,9 @@ class load_dataset(data.Dataset):
         
         augmenter = (
             TimeWarp(n_speed_change=5, max_speed_ratio=3) @ 0.5 +
-            Drift(max_drift=(0.01, 0.2), n_drift_points=100) @ 0.5 +
+            Drift(max_drift=(0.1, 0.5), n_drift_points=4) @ 0.5 +
             Reverse() @ 0.5 +
-            AddNoise(scale=0.1) @ 0.5 +
-            Quantize(n_levels=[20, 30, 50, 100]) @ 0.5
+            AddNoise(scale=0.1) @ 0.5
         )
 
         X = augmenter.augment(np.array(X))

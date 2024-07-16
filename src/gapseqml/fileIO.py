@@ -254,7 +254,7 @@ def split_datasets(ml_data, ratio_train, val_test_split, n_nucleotide = None, te
         if n_nucleotide is not None:
             if int(n_nucleotide) != int(sort_nucleotide):
                 continue
-
+            
         label_file_names = np.unique(np.extract((ml_data["labels"]==sort_label) &
                                                 (ml_data["n_nucleotide"]==sort_nucleotide),
                                                 ml_data["file_names"]))
@@ -378,6 +378,56 @@ def import_json_datasets(json_dir, json_channel, user_label=None):
             pass
         
     return json_datasets
+
+
+
+
+
+simulated_dir = r"C:\Users\turnerp\PycharmProjects\gapseqml\data\train\simulated"
+
+
+def import_gapseq_simulated(simulated_dir, simulated_dataset = {}):
+
+    if os.path.isdir(simulated_dir) == False:
+        print("directory does not exist")
+        return None
+    
+    simulated_paths = glob(simulated_dir + "*\**\*.txt", recursive=True)
+    
+    if simulated_dataset == {}:
+        simulated_dataset = {"data":[], "labels": [], "file_names":[]}
+    
+    for path in simulated_paths:
+        
+        try:
+        
+            file_name = os.path.basename(path)
+            
+            imported_data = json.load(open(path, "r"))
+            
+            data = imported_data["simulated_data"]
+            labels = imported_data["label"]
+            
+            simulated_dataset["data"] = data
+            simulated_dataset["labels"] = labels
+            simulated_dataset["file_names"] = [file_name] * len(data)
+            simulated_dataset["n_nucleotide"] = [0] * len(data)
+            
+        except:
+            print(traceback.format_exc())
+
+    return simulated_dataset
+
+
+
+
+# ml_data = import_gapseq_simulated(simulated_dir)
+
+
+
+
+
+
 
 
 

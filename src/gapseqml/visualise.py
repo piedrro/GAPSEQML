@@ -32,8 +32,12 @@ def visualise_dataset(dataset, n_examples = 1, label = 1, n_rows = 3, n_cols = 3
         vis_data = data
         vis_labels = labels
         
+    num_classes = len(np.unique(labels))
+    
+    print(num_classes)
     dataset = load_dataset(data=vis_data.tolist(),
                            labels=vis_labels.tolist(),
+                           num_classes=num_classes,
                            augment=False)
     dataloader = DataLoader(dataset=dataset, 
                             batch_size=n_cols*n_rows,
