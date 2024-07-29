@@ -1,4 +1,3 @@
-/data/
 /models/
 /dev/
 /dev/
@@ -11,3 +10,6 @@
 /evaluation_dataset.pickle
 /src/gapseqml/import_data.pickle
 /src/gapseqml/evaluation_dataset.pickle
+/data/
+/data/evaluate/
+/data/train/
