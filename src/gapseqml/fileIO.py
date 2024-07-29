@@ -383,7 +383,7 @@ def import_json_datasets(json_dir, json_channel, user_label=None):
 
 
 
-simulated_dir = r"C:\Users\turnerp\PycharmProjects\gapseqml\data\train\simulated"
+# simulated_dir = r"C:\Users\turnerp\PycharmProjects\gapseqml\data\train\simulated"
 
 
 def import_gapseq_simulated(simulated_dir, simulated_dataset = {}):
@@ -406,10 +406,13 @@ def import_gapseq_simulated(simulated_dir, simulated_dataset = {}):
             imported_data = json.load(open(path, "r"))
             
             data = imported_data["simulated_data"]
+            
             labels = imported_data["label"]
+            bound_fraction = imported_data["bound_fraction"]
             
             simulated_dataset["data"] = data
             simulated_dataset["labels"] = labels
+            simulated_dataset["bound_fraction"] = bound_fraction
             simulated_dataset["file_names"] = [file_name] * len(data)
             simulated_dataset["n_nucleotide"] = [0] * len(data)
             
@@ -419,17 +422,101 @@ def import_gapseq_simulated(simulated_dir, simulated_dataset = {}):
     return simulated_dataset
 
 
+def import_json_evaluation_dataset(json_dir, json_channel):
+    
+    if json_channel in ["donor", "acceptor"]:
+        json_channel = json_channel.capitalize()
+    elif json_channel in ["dd","da","aa","ad"]:
+        json_channel = json_channel.upper()
+    
+    json_files = glob(json_dir + "*\**\*.json", recursive=True)
+    
+    evaluation_dataset = []
+    
+    for path in json_files:
+        
+        try:
+        
+            json_dataset = {"data":[], "file_names":[]}
+            
+            file_name = os.path.basename(path)
+            
+            print(f"processing: {file_name}")
+            
+            import_data = json.load(open(path, "r"))["data"]
+            
+            dataset_list = list(import_data.keys())
+            n_traces = min([len(import_data[dataset]) for dataset in dataset_list])
+            
+            for i in range(n_traces):
+                
+                try:
+                
+                    localisation_data = {"data":[], "labels":[]}
+                    
+                    for dataset in dataset_list:
+                        
+                        dataset_dict = import_data[dataset][i]
+            
+                        if "ml_label" not in dataset_dict.keys():
+                            continue
+                        
+                        ml_label = dataset_dict["ml_label"]
+                        
+                        if "user_label" in dataset_dict:
+                            group_label = dataset_dict["user_label"]
+                        else:
+                            group_label = None
+                        
+                        localisation_data["labels"].append(ml_label)
+                        
+                        if "traces_dict" in dataset_dict.keys():
+                            if json_channel in dataset_dict["traces_dict"].keys():
+                                data = dataset_dict["traces_dict"][json_channel]
+                                localisation_data["data"].append(data)
+                        else:
+                            if json_channel in dataset_dict.keys():
+                                data = dataset_dict[json_channel]
+                                localisation_data["data"].append(data)
+                                
+                    if len(localisation_data["data"]) == 4:
+                        localisation_data["channel"] = json_channel
+                        localisation_data["dataset_list"] = dataset_list
+                        localisation_data["json_file"] = file_name
+                        localisation_data["group_label"] = group_label
+                        
+                        evaluation_dataset.append(localisation_data)
+                        
+                except:
+                    print(traceback.format_exc())
+                    pass
+                    
+        except:
+            print(traceback.format_exc())
+            pass
+        
+    return evaluation_dataset
+
+
+json_dir = r"C:\Users\turnerp\PycharmProjects\gapseqml\data\evaluate"
+json_channel="Donor"
+
+
+
+# with open('evaluation_dataset.pickle', 'wb') as handle:
+#     pickle.dump(evaluation_dataset, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+# with open('evaluation_dataset.pickle', 'rb') as handle:
+#     evaluation_dataset = pickle.load(handle)
+
+    
+
+
+
+
 
 
 # ml_data = import_gapseq_simulated(simulated_dir)
-
-
-
-
-
-
-
-
 
 
 # json_dir = r"C:\Users\turnerp\PycharmProjects\gapseqml\data\predict"

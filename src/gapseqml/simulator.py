@@ -11,7 +11,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed, ProcessPoolExec
 import tqdm
 from tqdm import tqdm
 import traceback
-
+import random
+from sklearn.preprocessing import OneHotEncoder
+from tsaug import (TimeWarp, Crop, Quantize, Drift, Reverse, AddNoise, 
+                   Convolve, Drift, Dropout, Pool, Resize)
 
 def calculate_cohens_d(trace, states):
     
@@ -91,7 +94,7 @@ def generate_transtion_matrix(n_states = 2, trans_prob=0.1):
     return matrix
 
 
-def short_dwell_func(states, short_dwell_prob, dwell_range = [5,50]):
+def short_dwell_func(states, short_dwell_prob, dwell_range = [5,20], max_n_dwells = 3):
     
     try:
         
@@ -116,12 +119,32 @@ def short_dwell_func(states, short_dwell_prob, dwell_range = [5,50]):
                 subarrays = np.split(states, segments)
                 subarrays = [arr for arr in subarrays if len(arr) > 0]
                 
-                for index, arr in enumerate(subarrays):
-                    bind_length = np.random.randint(min(dwell_range),max(dwell_range))
-                    if bind_length < len(arr):
-                        arr[bind_length:] = min(states)
+                subarrays_indices = np.arange(len(subarrays))
+                random.shuffle(subarrays_indices)
+                max_dwells = random.randint(1,max_n_dwells)
+
+                n_dwells = 0
+                for index in subarrays_indices:
+                    arr = subarrays[index]
+                    
+                    if np.min(arr) > np.min(states):
                         
+                        if n_dwells < max_dwells:
+                        
+                            bind_length = np.random.randint(min(dwell_range),max(dwell_range))
+                            
+                            if bind_length < len(arr):
+                                arr[bind_length:] = min(states)
+                                
+                            n_dwells += 1
+      
+                        else:
+                            arr[:] = min(states)
+                    
                 states = np.concatenate(subarrays)
+                
+                # plt.plot(states)
+                # plt.show()
             
     except:
         print(traceback.format_exc())
@@ -174,11 +197,11 @@ def compute_states(states, trace, trans_prob=None, bleached=None, bleach_index=N
     return n_states, stats
     
     
-def generate_nstate_trace(n_states = 2, trans_prob=[0.001,0.01], 
+def generate_nstate_trace(n_states = 2, trans_prob=[0,0.01], 
                           min_state_diff=0.3, eps = 1e-16, 
                           short_dwell_prob = 0.5, short_dwell_threshold = 50,
-                          bleach_lifetime = None, noise = [0.01,0.1],
-                          trace_length=1000):
+                          bleach_lifetime = None, noise = [0.01,0.2],
+                          trace_length=1000, augment = True):
     
     try:
     
@@ -225,14 +248,38 @@ def generate_nstate_trace(n_states = 2, trans_prob=[0.001,0.01],
         
         n_states, stats = compute_states(
             states, trace, trans_prob, bleached, bleach_index)
+
+        if n_states > 1:
+            bound_fraction = len(states[states == np.max(states)])/len(states)
+        else:
+            bound_fraction = 0
+            
         
+        stats["bound_fraction"] = bound_fraction
+        
+        if augment:
+            
+            n_drift_points = random.randint(1,10)
+            augmenter = (Drift(max_drift=(0.1, 0.3), 
+                               n_drift_points=n_drift_points) @ 0.5)
+            trace = augmenter.augment(np.array(trace))
+            trace = list(trace)
+
         if n_states == 2:
             if stats["state1_max_length"] > short_dwell_threshold:
                 label = 2
             else:
                 label = 1
+                
+            state_means = np.unique(states)
+            sorted(state_means)
+
+            for state_index, state_mean in enumerate(state_means):
+                states[states==state_mean] = state_index
         else:
             label = 0
+            
+            states = np.zeros_like(states)
             
         stats["label"] = label
 
@@ -242,19 +289,16 @@ def generate_nstate_trace(n_states = 2, trans_prob=[0.001,0.01],
         
     return trace, states, stats
     
-# trace, states, trace_info = generate_nstate_trace()
-
-# plt.plot(trace)
-# plt.plot(states)
-# plt.title(f"max_length:{trace_info['state1_max_length']}, n_transitions:{trace_info['state1_transitions']}")
-# plt.show()
+trace, states, trace_info = generate_nstate_trace()
 
 
 if __name__ == '__main__':
     
     simulated_traces = []
     simulated_labels = []
+    simulated_bound_fractions = []
     
+    # generate_nstate_trace()
     with concurrent.futures.ProcessPoolExecutor(max_workers=10) as executor:
         futures = [executor.submit(generate_nstate_trace) for i in range(50000)]
     
@@ -265,7 +309,10 @@ if __name__ == '__main__':
                 if trace is not None:
                     simulated_traces.append(trace)
                     label = trace_info["label"]
+                    bound_fraction = trace_info["bound_fraction"]
+                    
                     simulated_labels.append(label)
+                    simulated_bound_fractions.append(bound_fraction)
 
             except:
                 pass
@@ -274,10 +321,12 @@ if __name__ == '__main__':
     
     simulated_traces = np.array(simulated_traces)
     simulated_labels = np.array(simulated_labels)
+    simulated_bound_fractions = np.array(simulated_bound_fractions)
     
     permutation = np.random.permutation(len(simulated_traces))
     simulated_traces = simulated_traces[permutation]
     simulated_labels = simulated_labels[permutation]
+    simulated_bound_fractions = simulated_bound_fractions[permutation]
     
     label_max = 1000
     
@@ -292,17 +341,21 @@ if __name__ == '__main__':
           
     simulated_traces = np.take(simulated_traces, index_selection,axis=0)
     simulated_labels = np.take(simulated_labels, index_selection, axis=0)
+    simulated_bound_fractions = np.take(simulated_bound_fractions, index_selection, axis=0)
     
     permutation = np.random.permutation(len(simulated_traces))
     simulated_traces = simulated_traces[permutation]
     simulated_labels = simulated_labels[permutation]
+    simulated_bound_fractions = simulated_bound_fractions[permutation]
     
-    simulated_labels = [label.tolist() for label in simulated_labels]
     simulated_traces = [trace.tolist() for trace in simulated_traces]
+    simulated_labels = [label.tolist() for label in simulated_labels]
+    simulated_bound_fractions = [label.tolist() for label in simulated_bound_fractions]
             
     json_dict = {}
     json_dict["simulated_data"] = simulated_traces
     json_dict["label"] = simulated_labels
+    json_dict["bound_fraction"] = simulated_bound_fractions
     
     gapseqml_dir = os.path.dirname(gapseqml.__file__)
     gapseqml_dir = os.path.dirname(gapseqml_dir)

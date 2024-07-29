@@ -14,6 +14,7 @@ class load_dataset(data.Dataset):
                  labels = [],
                  num_classes = 2,
                  augment=None,
+                 mode="classify",
                  ):
 
 
@@ -21,8 +22,9 @@ class load_dataset(data.Dataset):
         self.data = data
         self.labels = labels
         self.num_classes = num_classes
-                    
+        self.mode = mode
 
+        
     def __len__(self):
         return len(self.data)
 
@@ -56,12 +58,14 @@ class load_dataset(data.Dataset):
         X = self.normalize99(X)
         X = self.rescale01(X)
         
-        # Typecasting
-       
         X = torch.from_numpy(X.copy()).float()
         X = torch.unsqueeze(X,0)
-        y = F.one_hot(torch.tensor(y), num_classes=self.num_classes).float()
-
+         
+        if self.mode == "classify":
+            y = F.one_hot(torch.tensor(y), 
+                          num_classes=self.num_classes).float()
+        else:
+            y = torch.tensor(y).float()
 
         return X, y
 

@@ -78,28 +78,31 @@ class Trainer:
         self.best_model_weights = None
         self.num_classes = num_classes
         
-        if os.path.exists(save_dir):
-            self.model_dir = os.path.join(save_dir,"models", model_folder + "_" + self.timestamp)
+        self.initialise_dataloaders()
+
+
+    def initialise_model_path(self):
+        
+        if os.path.exists(self.save_dir):
+            self.model_dir = os.path.join(self.save_dir,"models", self.model_folder + "_" + self.timestamp)
         else:
-            self.model_dir = os.path.join("models", model_folder + "_" + self.timestamp)
+            self.model_dir = os.path.join("models", self.model_folder + "_" + self.timestamp)
             
         self.model_dir = os.path.abspath(self.model_dir)
         
         if not os.path.exists(self.model_dir):
             os.makedirs(self.model_dir)
 
-        if pretrained_model:
-            if os.path.isfile(pretrained_model):
-                model_weights = torch.load(os.path.abspath(pretrained_model))['model_state_dict']
-                model.load_state_dict(model_weights)
+        if self.pretrained_model:
+            if os.path.isfile(self.pretrained_model):
+                model_weights = torch.load(os.path.abspath(self.pretrained_model))['model_state_dict']
+                self.model.load_state_dict(model_weights)
                 
-        if tensorboard:
-            self.writer = SummaryWriter(log_dir= "runs/" + self.model_folder + "_" + timestamp)
+        if self.tensorboard:
+            self.writer = SummaryWriter(log_dir= "runs/" + self.model_folder + "_" + self.timestamp)
             
         self.model_path = os.path.join(self.model_dir, f"inceptiontime_model_{self.timestamp}")
         
-        self.initialise_dataloaders()
-
         
     def initialise_dataloaders(self):
         
@@ -160,7 +163,9 @@ class Trainer:
         
     def visualise_augmentations(self,  n_examples = 1, save_plots=True, show_plots=False):
 
-        model_dir = pathlib.Path(self.model_dir)
+        if save_plots:
+            self.initialise_model_path()
+            model_dir = pathlib.Path(self.model_dir)
 
         for example_int in range(n_examples):
 
@@ -211,6 +216,10 @@ class Trainer:
     
     def visualise_dataset(self, n_examples = 1, label = 1, n_rows = 3, n_cols = 3, 
                           save_plots=True, show_plots=False):
+        
+        if save_plots:
+            self.initialise_model_path()
+            model_dir = pathlib.Path(self.model_dir)
 
         data = np.array(self.train_dataset["data"])
         labels = np.array(self.train_dataset["labels"])
@@ -337,6 +346,9 @@ class Trainer:
                                                 augment=False)
         
     def tune_hyperparameters(self, num_trials=5, num_traces = 500, num_epochs = 4):
+        
+        self.initialise_model_path()
+        model_dir = pathlib.Path(self.model_dir)
 
         self.load_tune_dataset(num_traces=num_traces, num_epochs=num_epochs)
 
@@ -361,8 +373,6 @@ class Trainer:
         self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=20, gamma=0.5)
         self.initialise_dataloaders()
         
-        model_dir = pathlib.Path(self.model_dir)
-
         optimisation_history_path = pathlib.Path('').joinpath(*model_dir.parts, "Optuna","optuna_optimisation_history_plot.png")
         slice_plot_path = pathlib.Path('').joinpath(*model_dir.parts, "Optuna","optuna_slice_plot.png")
         parallel_coordinate_plot_path = pathlib.Path('').joinpath(*model_dir.parts, "Optuna","optuna_parallel_coordinate_plot.png")
@@ -390,6 +400,8 @@ class Trainer:
     def train(self):
 
         progressbar = tqdm.tqdm(range(self.epochs), 'Progress', total=self.epochs, position=0, leave=True)
+        
+        self.initialise_model_path()
 
         for i in progressbar:
             """Epoch counter"""
@@ -704,10 +716,105 @@ class Trainer:
         return json_predictions
         
         
-                    
-                
-                
+    def evaluate_json_dataset(self, evaluation_dataset, model_path = None, sensitive = False):
+        
+        if len(evaluation_dataset) == 0:
+            return None
+        
+        print(f"imported {len(evaluation_dataset)} traces")
+    
+        if model_path is not None:
             
+            model_name = os.path.basename(model_path)
+            
+            if os.path.exists(model_path) == True:
+                
+                self.model_path = model_path
+                
+                model_data = torch.load(model_path)
+                model_weights = model_data['model_state_dict']
+                self.model.load_state_dict(model_weights)
+                
+                print(f"loaded model: {model_name}")
+                
+            else:
+                print(f"could not not :{model_name}")
+                
+            pred_labels_list = []
+            pred_confidence_list = []
+            trace_prediction = []
+            
+            json_predictions = []
+
+            self.model.eval()
+            
+            batch_iter = tqdm.tqdm(evaluation_dataset, 'Predicting', 
+                                    total=len(evaluation_dataset), position=1, leave=True, disable=False)
+            
+            for i, localisation_data in enumerate(batch_iter):
+                
+                json_file = localisation_data["json_file"]
+                
+                data = localisation_data["data"]
+                data = [self.rescale01(trace) for trace in data]
+                data = np.array(data)
+                data = np.expand_dims(data,1)
+                
+                true_label = np.array(localisation_data["labels"])
+                true_dataset_index = int(np.argwhere(true_label != 2))
+                
+                group_label = localisation_data["group_label"]
+                
+                if group_label == 1:
+                    group_label = 0
+                else:
+                    group_label = 1
+
+                data = torch.from_numpy(data).float()
+                data = data.to(self.device)
+                
+                with torch.no_grad():
+                    pred_label = self.model(data)
+                    
+                    # Calculate confidence scores using softmax
+                    pred_confidences = torch.nn.functional.softmax(pred_label, dim=1)
+                    
+                    # Get the predicted labels and their confidence scores
+                    pred_labels = torch.argmax(pred_confidences, dim=1)
+                    pred_confidence_scores = pred_confidences[range(pred_confidences.shape[0]), pred_labels]
+                
+                    # Convert to list if necessary
+                    pred_labels = pred_labels.cpu().numpy()
+                    pred_confidence_scores = pred_confidence_scores.cpu().numpy()
+                    
+                    if np.sum(pred_labels == 2) == 3:
+
+                        pred_dataset_index = int(np.argwhere(pred_labels != 2))
+                        prediction_label = pred_labels[pred_dataset_index]
+                        prediction_confidence = pred_confidence_scores[pred_dataset_index]
+                        pred_group_label = 1
+                        
+                    else:
+                        pred_dataset_index = None
+                        prediction_label = None
+                        prediction_confidence = None
+                        pred_group_label = 0
+                        
+                    prediction = {"json_file":  json_file,
+                                  "group_label":group_label,
+                                  "pred_group_label":pred_group_label,
+                                   "true_dataset_index": true_dataset_index,
+                                   "pred_dataset_index": pred_dataset_index,
+                                   "prediction_confidence": prediction_confidence}
+                        
+                    json_predictions.append(prediction)
+                                   
+
+        if len(json_predictions) > 0:
+            json_predictions = pd.DataFrame(json_predictions)
+    
+        return json_predictions
+                
 
                 
         

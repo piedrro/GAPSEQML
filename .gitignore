@@ -4,3 +4,10 @@
 /dev/
 /ml_data.pickle
 /json_datasets.pickle
+/predictions.csv
+/prediction_dev.py
+/ml_data.pickle
+/json_datasets.pickle
+/evaluation_dataset.pickle
+/src/gapseqml/import_data.pickle
+/src/gapseqml/evaluation_dataset.pickle
