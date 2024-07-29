@@ -13,14 +13,10 @@ import traceback
 import sklearn
 import pickle
 
-from gapseqml.dataloader import load_dataset
-
 from gapseqml.fileIO import (import_gapseqml_data, split_datasets, 
                              import_json_datasets, import_gapseq_simulated, import_json_evaluation_dataset)
-
 from gapseqml.visualise import visualise_dataset
-from gapseqml.regression_trainer import Trainer
-
+from gapseqml.trainer import Trainer
 
 # device
 if torch.cuda.is_available():
@@ -30,43 +26,38 @@ else:
     print("Training on CPU")
     device = torch.device('cpu')
 
-
 ratio_train = 0.9
 val_test_split = 0.9
-BATCH_SIZE = 12
-LEARNING_RATE = 0.0001
-EPOCHS = 5
+BATCH_SIZE = 10
+LEARNING_RATE = 0.001
+EPOCHS = 10
 AUGMENT = True
 NUM_WORKERS = 10
-MODEL_FOLDER = "gapseqml_regression"
+MODEL_FOLDER = "gapseqml_classification"
 
 ml_data = import_gapseq_simulated(r"data\train\simulated")
 
-class regressionModel(nn.Module):
-    def __init__(self, c_in, c_out):
-        super(regressionModel, self).__init__()
-        self.inception_time = InceptionTime(c_in, c_out)
-        self.fc = nn.Linear(c_out, 1)  # Output layer for regression
-
-    def forward(self, x):
-        x = self.inception_time(x)
-        x = self.fc(x)
-        return x
-
+visualise_dataset(ml_data, n_examples = 3, label = 0,
+                  n_rows = 4, n_cols = 4)
 
 if __name__ == '__main__':
-    
+
     datasets = split_datasets(ml_data, ratio_train, val_test_split)
     train_dataset, validation_dataset, test_dataset = datasets
     
-    model = regressionModel(c_in=1, c_out=64).to(device)
-    
-    criterion = nn.MSELoss()  # Mean Squared Error loss
+    num_classes = len(np.unique(ml_data["labels"]))
+
+    MODEL_FOLDER = f"gapseqml_simulated"
+
+    model = InceptionTime(1,num_classes).to(device)
+
+    criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
-    
+
     trainer = Trainer(
         model=model,
+        num_classes = num_classes,
         device=device,
         optimizer=optimizer,
         criterion=criterion,
@@ -79,22 +70,21 @@ if __name__ == '__main__':
         learning_rate = LEARNING_RATE,
         batch_size = BATCH_SIZE,
         model_folder=MODEL_FOLDER)
+
+    trainer.visualise_augmentations(n_examples=5,
+                                    show_plots=True,
+                                    save_plots = False)
     
-    # model = trainer.tune_hyperparameters()
     
+    trainer.tune_hyperparameters(num_trials=50,
+                                  num_traces = 1000,
+                                  num_epochs = 5)
+
     model_path, state_dict_best = trainer.train()
-    
-    # model_path = r"C:\Users\turnerp\PycharmProjects\gapseqml\models\gapseqml_regression_240725_1634\inceptiontime_model_240725_1634"
-    
-    # json_dir = r"C:\Users\turnerp\PycharmProjects\gapseqml\data\evaluate"
-    # evaluation_dataset = import_json_evaluation_dataset(json_dir, "acceptor")
-    
-    # with open('evaluation_dataset.pickle', 'wb') as handle:
-    #     pickle.dump(evaluation_dataset, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    
-    # with open('evaluation_dataset.pickle', 'rb') as handle:
-    #     evaluation_dataset = pickle.load(handle)
-    
-    # predictions = trainer.evaluate_json_dataset(evaluation_dataset, model_path)
-    
+
+    json_dir = r"C:\Users\turnerp\PycharmProjects\gapseqml\data\evaluate"
+    evaluation_dataset = import_json_evaluation_dataset(json_dir, "donor")
+
+    predictions = trainer.evaluate_json_dataset(evaluation_dataset, model_path)
+    predictions.to_csv("predictions.csv",sep=",")
     

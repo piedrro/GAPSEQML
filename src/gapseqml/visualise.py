@@ -344,47 +344,6 @@ def plot_prediction_histograms(model_data, save_path=None):
 
 
 
-# model_path = r"C:\Users\turnerp\PycharmProjects\gapseqml\models\TEST_240705_0932\inceptiontime_model_240705_0932"
-# model_data = torch.load(model_path)
-
-
-# test_results = model_data["test_results"]
-# pred_labels = np.array(test_results["pred_labels"])
-# true_labels = np.array(test_results["true_labels"])
-
-# plot_confusion_matrix(true_labels, pred_labels, ["comp","non-comp"])
-
-# plot_evaluation_visualisations(model_data, model_path)
-# index_dict = plot_confidence_plots(model_data)
-        
-
-# correct_indices = np.argwhere(pred_labels==true_labels)
-# incorred_indices = np.argwhere(pred_labels!=true_labels)
-
-# highest_conf_indices = np.argsort(confidences)[-n_plots:][::-1]
-# lowest_conf_indices = np.argsort(confidences)[:n_plots]
-
-
-# plot_data = []
-# plot_conf = []
-# plot_labels = []
-
-# for index in highest_conf_indices:
-    
-#     data = test_results["test_data"][index][0]
-#     label = test_results["true_labels"][index]
-#     conf = confidences[index]
-    
-#     plot_data.append(data)
-#     plot_labels.append(label)
-#     plot_conf.append(conf)
-
-
-
-
-
-
-
 
 
     
